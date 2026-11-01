@@ -1,24 +1,30 @@
 -- ===========================================================================
--- CSCI235 Assignment 2 - solution3.sql
+-- CSCI235 Assignment 2 - Task 3
+-- Stored function: longtrip(DLNUM)
 --
--- The brief is inconsistent about file naming:
---   * Task 1 steps 3-4 say to save the stored PROCEDURE implementation in
---     "solution3.sql" and capture its output in "solution3.lst".
---   * The submission list maps Task 1 -> solution1.sql, Task 3 -> solution3.sql.
+-- Naming note on the brief:
+--   Task 1 step 3 says the stored PROCEDURE should be saved in "solution3.sql",
+--   while Task 1's own submission list says "solution1.sql" and Task 3 says the
+--   FUNCTION goes in "solution3.sql". The safest reading is that step 3 is a
+--   copy-paste slip, but the procedure is re-declared here anyway so this file
+--   also satisfies the literal wording. It is a CREATE OR REPLACE, so it is
+--   idempotent and harmless if solution1.sql has already been run.
 --
--- This script satisfies both readings: it contains the Task 1 procedure and
--- its two executions, then the Task 3 function and report. solution1.sql
--- remains the focused Task 1 script; this is the combined one.
+--   The two CALL examples for Task 1 deliberately do NOT live here: Task 3's
+--   Report Guidelines require "no errors in the output shown in your report",
+--   and the second Task 1 execution is meant to raise. Those calls are in
+--   solution1.sql, whose step 4 asks for success AND error messages.
 --
--- Target: database `tpchr`, role `tpchr`. Assumes a freshly seeded database
--- (dbCreateTruck-2026S4.sql) because the first execution inserts E# 16.
+-- Target: database `tpchr`, role `tpchr`.
 -- ===========================================================================
 
 \set ECHO all
 
--- ===========================================================================
--- TASK 1 - stored procedure add_employee
--- ===========================================================================
+-- ---------------------------------------------------------------------------
+-- Re-declared from Task 1 (definition only, no executions).
+-- Inserts a TRKEMPLOYEE row plus exactly one sub-type row, and refuses to
+-- let the same E# or L# exist in both DRIVER and MECHANIC.
+-- ---------------------------------------------------------------------------
 CREATE OR REPLACE PROCEDURE add_employee(
     p_enum       NUMERIC,                  -- E#
     p_name       VARCHAR,                  -- NAME
@@ -83,48 +89,6 @@ BEGIN
 END;
 $$;
 
--- ---------------------------------------------------------------------------
--- TASK 1 - first execution: a brand-new DRIVER, nothing can collide
--- ---------------------------------------------------------------------------
-CALL add_employee(
-    p_enum       => 16,
-    p_name       => 'Cristiano Ronaldo',
-    p_dob        => DATE '1990-11-12',
-    p_address    => '7 Sim St, Wollongong NSW 2500',
-    p_hiredate   => CURRENT_DATE,
-    p_lnum       => 40002,
-    p_status     => 'AVAILABLE',
-    p_experience => NULL,
-    p_role       => 'DRIVER' );
-
--- Proof it landed in exactly two tables.
-SELECT * FROM TRKEMPLOYEE WHERE ENUM = 16;
-SELECT * FROM DRIVER      WHERE ENUM = 16;
-SELECT * FROM MECHANIC    WHERE ENUM = 16;
-
--- ---------------------------------------------------------------------------
--- TASK 1 - second execution: MUST FAIL
---
--- Lionel Messi signs on as a MECHANIC quoting L# 40002, which already belongs
--- to a DRIVER. E# 17 is free, so the primary key cannot catch it, and
--- MECHANIC_UNIQUE(LNUM) cannot catch it either because 40002 is absent from
--- MECHANIC. Only the disjointness guard can reject this call.
--- ---------------------------------------------------------------------------
-CALL add_employee(
-    p_enum       => 17,
-    p_name       => 'Lionel Messi',
-    p_dob        => DATE '1987-06-24',
-    p_address    => '10 Fake St, Wollongong NSW 2500',
-    p_hiredate   => CURRENT_DATE,
-    p_lnum       => 40002,
-    p_status     => 'AVAILABLE',
-    p_experience => 'EXPERT',
-    p_role       => 'MECHANIC' );
-
--- After a rejected CALL nothing may be written.
-SELECT * FROM TRKEMPLOYEE WHERE ENUM = 17;      -- expect 0 rows
-SELECT * FROM MECHANIC    WHERE LNUM = 40002;   -- expect 0 rows
-
 -- ===========================================================================
 -- TASK 3 - stored function longtrip(DLNUM)
 --
@@ -157,9 +121,11 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
--- TASK 3 - report: every driver's name and the length of their longest trip.
+-- Task 3 report: every driver's name and the length of their longest trip.
 -- NAME lives on TRKEMPLOYEE while longtrip() takes DRIVER.LNUM, so the tables
--- are joined on ENUM and the function is fed the licence.
+-- are joined on ENUM and the function is fed the licence. The brief's example
+-- (SELECT NAME, LONGTRIP(L#) FROM DRIVER) cannot run as printed because
+-- DRIVER has no NAME column.
 -- ---------------------------------------------------------------------------
 SELECT e.NAME,
        d.LNUM,

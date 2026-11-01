@@ -1,10 +1,14 @@
 ﻿
 
--- ===========================================================================
+-- ---------------------------------------------------------------------------
 
--- TASK 1 - stored procedure add_employee
+-- Re-declared from Task 1 (definition only, no executions).
 
--- ===========================================================================
+-- Inserts a TRKEMPLOYEE row plus exactly one sub-type row, and refuses to
+
+-- let the same E# or L# exist in both DRIVER and MECHANIC.
+
+-- ---------------------------------------------------------------------------
 
 CREATE OR REPLACE PROCEDURE add_employee(
 
@@ -135,115 +139,6 @@ $$;
 CREATE PROCEDURE
 
 
--- ---------------------------------------------------------------------------
-
--- TASK 1 - first execution: a brand-new DRIVER, nothing can collide
-
--- ---------------------------------------------------------------------------
-
-CALL add_employee(
-
-    p_enum       => 16,
-
-    p_name       => 'Cristiano Ronaldo',
-
-    p_dob        => DATE '1990-11-12',
-
-    p_address    => '7 Sim St, Wollongong NSW 2500',
-
-    p_hiredate   => CURRENT_DATE,
-
-    p_lnum       => 40002,
-
-    p_status     => 'AVAILABLE',
-
-    p_experience => NULL,
-
-    p_role       => 'DRIVER' );
-
-CALL
-
-
--- Proof it landed in exactly two tables.
-
-SELECT * FROM TRKEMPLOYEE WHERE ENUM = 16;
-
- enum |       name        |    dob     |            address            |  hiredate  | comment 
-------+-------------------+------------+-------------------------------+------------+---------
-   16 | Cristiano Ronaldo | 1990-11-12 | 7 Sim St, Wollongong NSW 2500 | 2026-11-01 | 
-(1 row)
-
-SELECT * FROM DRIVER      WHERE ENUM = 16;
-
- enum | lnum  |  status   | totaltripmade 
-------+-------+-----------+---------------
-   16 | 40002 | AVAILABLE |              
-(1 row)
-
-SELECT * FROM MECHANIC    WHERE ENUM = 16;
-
- enum | lnum | status | experience 
-------+------+--------+------------
-(0 rows)
-
-
-
--- ---------------------------------------------------------------------------
-
--- TASK 1 - second execution: MUST FAIL
-
---
-
--- Lionel Messi signs on as a MECHANIC quoting L# 40002, which already belongs
-
--- to a DRIVER. E# 17 is free, so the primary key cannot catch it, and
-
--- MECHANIC_UNIQUE(LNUM) cannot catch it either because 40002 is absent from
-
--- MECHANIC. Only the disjointness guard can reject this call.
-
--- ---------------------------------------------------------------------------
-
-CALL add_employee(
-
-    p_enum       => 17,
-
-    p_name       => 'Lionel Messi',
-
-    p_dob        => DATE '1987-06-24',
-
-    p_address    => '10 Fake St, Wollongong NSW 2500',
-
-    p_hiredate   => CURRENT_DATE,
-
-    p_lnum       => 40002,
-
-    p_status     => 'AVAILABLE',
-
-    p_experience => 'EXPERT',
-
-    p_role       => 'MECHANIC' );
-
-psql:submission/solution3/solution3.sql:122: ERROR:  employee 17 / licence 40002 already exists as a DRIVER; drivers and mechanics must be disjoint
-CONTEXT:  PL/pgSQL function add_employee(numeric,character varying,date,character varying,date,numeric,character varying,character varying,character varying) line 24 at RAISE
-
-
--- After a rejected CALL nothing may be written.
-
-SELECT * FROM TRKEMPLOYEE WHERE ENUM = 17;      -- expect 0 rows
-
- enum | name | dob | address | hiredate | comment 
-------+------+-----+---------+----------+---------
-(0 rows)
-
-SELECT * FROM MECHANIC    WHERE LNUM = 40002;   -- expect 0 rows
-
- enum | lnum | status | experience 
-------+------+--------+------------
-(0 rows)
-
-
-
 -- ===========================================================================
 
 -- TASK 3 - stored function longtrip(DLNUM)
@@ -309,11 +204,15 @@ CREATE FUNCTION
 
 -- ---------------------------------------------------------------------------
 
--- TASK 3 - report: every driver's name and the length of their longest trip.
+-- Task 3 report: every driver's name and the length of their longest trip.
 
 -- NAME lives on TRKEMPLOYEE while longtrip() takes DRIVER.LNUM, so the tables
 
--- are joined on ENUM and the function is fed the licence.
+-- are joined on ENUM and the function is fed the licence. The brief's example
+
+-- (SELECT NAME, LONGTRIP(L#) FROM DRIVER) cannot run as printed because
+
+-- DRIVER has no NAME column.
 
 -- ---------------------------------------------------------------------------
 
@@ -329,15 +228,14 @@ SELECT e.NAME,
 
  ORDER BY LongestTrip DESC, e.NAME;
 
-       name        | lnum  | longesttrip 
--------------------+-------+-------------
- Adam Taylor       | 10003 |           8
- Frederic Jones    | 20002 |           5
- John Doe          | 10002 |           5
- John Lucas        | 30005 |           5
- John Smith        | 10001 |           5
- Adam Fox          | 20005 |           4
- Andrew K. Smith   | 10008 |           0
- Cristiano Ronaldo | 40002 |           0
-(8 rows)
+      name       | lnum  | longesttrip 
+-----------------+-------+-------------
+ Adam Taylor     | 10003 |           8
+ Frederic Jones  | 20002 |           5
+ John Doe        | 10002 |           5
+ John Lucas      | 30005 |           5
+ John Smith      | 10001 |           5
+ Adam Fox        | 20005 |           4
+ Andrew K. Smith | 10008 |           0
+(7 rows)
 
