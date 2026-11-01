@@ -118,11 +118,13 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Part 2: report
+-- Part 2: the report query (Task 3 "Execution Output")
 --
--- NAME lives on TRKEMPLOYEE, LONGTRIP takes DRIVER.LNUM, so the two tables
--- are joined on ENUM while the function is fed the licence. The brief's
--- example (SELECT NAME, LONGTRIP(L#) FROM DRIVER) cannot run as printed.
+-- Lists every driver's name with the length of their longest trip.
+-- NAME lives on TRKEMPLOYEE and LONGTRIP takes DRIVER.LNUM, so the tables are
+-- joined on ENUM while the function is fed the licence. The brief's example
+-- (SELECT NAME, LONGTRIP(L#) FROM DRIVER) cannot run as printed because
+-- DRIVER has no NAME column.
 -- ---------------------------------------------------------------------------
 SELECT e.NAME,
        d.LNUM,
@@ -130,16 +132,3 @@ SELECT e.NAME,
   FROM DRIVER d
   JOIN TRKEMPLOYEE e ON e.ENUM = d.ENUM
  ORDER BY LongestTrip DESC, e.NAME;
-
--- Independent cross-check: per-driver maximum leg count without the function.
-SELECT d.LNUM,
-       COALESCE(max(s.legs), 0) AS expected
-  FROM DRIVER d
-  LEFT JOIN (SELECT t.LNUM AS dl,
-                    t.TNUM,
-                    count(l.LEGNUM) AS legs
-               FROM TRIP t
-               LEFT JOIN TRIPLEG l ON l.TNUM = t.TNUM
-              GROUP BY t.LNUM, t.TNUM) s ON s.dl = d.LNUM
- GROUP BY d.LNUM
- ORDER BY d.LNUM;
