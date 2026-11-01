@@ -1,0 +1,652 @@
+-- Drop all previously created tables
+drop table TRKEMPLOYEE cascade;
+drop table DRIVER cascade;
+drop table MECHANIC cascade;
+drop table TRUCK cascade;
+drop table TRIP cascade;
+drop table TRIPLEG cascade;
+drop table MAINTENANCE cascade;
+
+-- Create the sample database
+CREATE TABLE TRKEMPLOYEE(
+        ENUM            NUMERIC(12)      NOT NULL,
+        NAME            VARCHAR(50)     NOT NULL,
+        DOB             DATE                    ,
+        ADDRESS         VARCHAR(300)    NOT NULL,
+        HIREDATE        DATE            NOT NULL,
+        COMMENT         VARCHAR(500),	
+        CONSTRAINT TRKEMPLOYEE_PKEY PRIMARY KEY(ENUM) );
+
+INSERT INTO TRKEMPLOYEE VALUES( 1, 'John Smith', NULL, '42 Victoria St. Hurstville, NSW 2456',current_date - INTERVAL '1.5 weeks',null);
+INSERT INTO TRKEMPLOYEE VALUES( 2, 'Peter Taylor', TO_DATE('12-JAN-1960','DD-MON-YYYY'), '42 Victoria St. Hurstville, NSW 2456',current_date - INTERVAL '1.5 weeks',null);
+INSERT INTO TRKEMPLOYEE VALUES( 3, 'John Doe', TO_DATE('23-MAR-1956','DD-MON-YYYY'), '12 Station St. Dapto, NSW 2530',current_date - INTERVAL '3 months',null );
+INSERT INTO TRKEMPLOYEE VALUES( 4, 'John Gray', TO_DATE('05-MAY-1978','DD-MON-YYYY'), '16 Station St. Dapto, NSW 2530',current_date - INTERVAL '1.4 months',null );
+INSERT INTO TRKEMPLOYEE VALUES( 5, 'Adam Taylor', TO_DATE('01-JAN-1970','DD-MON-YYYY'), '42 Church St. City, NSW 2300',current_date - INTERVAL '3.5 months',null );
+INSERT INTO TRKEMPLOYEE VALUES( 6, 'Michael Jones', TO_DATE('05-OCT-1965','DD-MON-YYYY'), '23 Waterloo Ave. Surry Hills, NSW 2502',current_date - INTERVAL '5.2 months',null );
+INSERT INTO TRKEMPLOYEE VALUES( 7, 'Frederic Jones', TO_DATE('28-FEB-1973','DD-MON-YYYY'), '23 Victoria St. Redfern, NSW 2420',current_date - INTERVAL '9 months',null );
+INSERT INTO TRKEMPLOYEE VALUES( 8, 'Peter O''Brien', TO_DATE('28-FEB-1973','DD-MON-YYYY'), '19 Lucas Dr. Horsley, NSW 2530',current_date - INTERVAL '2 years',null );
+INSERT INTO TRKEMPLOYEE VALUES( 9, 'John Lucas', TO_DATE('16-DEC-1956','DD-MON-YYYY'), '20 Huxley St. Horsley, NSW 2530',current_date - INTERVAL '3.2 years',null );
+INSERT INTO TRKEMPLOYEE VALUES( 10, 'John Fox', TO_DATE('25-OCT-1965','DD-MON-YYYY'), '18 Victoria St. Hurstville, NSW 2456',current_date - INTERVAL '0.7 years',null );
+INSERT INTO TRKEMPLOYEE VALUES( 11, 'Adam Fox', TO_DATE('04-MAY-1970','DD-MON-YYYY'), '45 Victoria St. Hurstville, NSW 2456',current_date - INTERVAL '0.8 years',null );
+INSERT INTO TRKEMPLOYEE VALUES( 12, 'Phillip Cox', TO_DATE('12-DEC-1974','DD-MON-YYYY'), '5 The Avenue, Rockdale, NSW 2300',TO_DATE('04-APR-2005','DD-MON-YYYY') );
+INSERT INTO TRKEMPLOYEE VALUES( 13, 'Andrew K. Smith', TO_DATE('04-APR-1959','DD-MON-YYYY'), '42 Bambaramba Ave. Pennant Hills, NSW 2556',current_date - INTERVAL '1.5 years',null );
+INSERT INTO TRKEMPLOYEE VALUES( 14, 'Andrew R. Smith', TO_DATE('01-APR-1983','DD-MON-YYYY'), '67 King Cr. Hurstville, NSW 2456',current_date - INTERVAL '1.3 years',null );
+INSERT INTO TRKEMPLOYEE VALUES( 15, 'Michael Potter', TO_DATE('01-APR-1985','DD-MON-YYYY'), '568 Bong Bong St. Horsley, NSW 2530',current_date - INTERVAL '1.6 years',null );
+        
+
+CREATE TABLE DRIVER(
+        ENUM              NUMERIC(12)      NOT NULL,
+        LNUM              NUMERIC(8)       NOT NULL,
+        STATUS          VARCHAR(10)     NOT NULL,
+	  totalTripMade	NUMERIC(6),
+        CONSTRAINT DRIVER_PKEY PRIMARY KEY(ENUM),
+        CONSTRAINT DRIVER_UNIQUE UNIQUE(LNUM),
+        CONSTRAINT DRIVER_FKEY FOREIGN KEY(ENUM) REFERENCES TRKEMPLOYEE(ENUM),
+        CONSTRAINT DRIVER_STATUS CHECK ( STATUS IN 
+                        ('AVAILABLE', 'BUSY', 'ON LEAVE')) );
+
+
+INSERT INTO DRIVER VALUES( 1, 10001, 'AVAILABLE', null );
+INSERT INTO DRIVER VALUES( 3, 10002, 'AVAILABLE', null );
+INSERT INTO DRIVER VALUES( 5, 10003, 'ON LEAVE', null );
+INSERT INTO DRIVER VALUES( 7, 20002, 'BUSY', null );
+INSERT INTO DRIVER VALUES( 9, 30005, 'BUSY', null );
+INSERT INTO DRIVER VALUES( 11, 20005, 'ON LEAVE', null );
+INSERT INTO DRIVER VALUES( 13, 10008, 'ON LEAVE', null );
+
+                        
+CREATE TABLE MECHANIC(
+        ENUM              NUMERIC(12)      NOT NULL,
+        LNUM              NUMERIC(8)       NOT NULL,
+        STATUS          VARCHAR(10)     NOT NULL,
+        EXPERIENCE      VARCHAR(10)     NOT NULL,
+        CONSTRAINT MECHANIC_PKEY PRIMARY KEY(ENUM),
+        CONSTRAINT MECHANIC_UNIQUE UNIQUE(LNUM),
+        CONSTRAINT MECHANIC_FKEY FOREIGN KEY(ENUM) REFERENCES TRKEMPLOYEE(ENUM),
+        CONSTRAINT MECHANIC_STATUS CHECK ( STATUS IN 
+                        ('AVAILABLE', 'BUSY', 'ON_LEAVE')), 
+        CONSTRAINT MECHANIC_EXPERIENCE CHECK ( EXPERIENCE IN 
+                        ('BEGINNER', 'STANDARD', 'EXPERT')) );  
+
+INSERT INTO MECHANIC VALUES( 2,  10345, 'AVAILABLE', 'EXPERT'  );
+INSERT INTO MECHANIC VALUES( 4,  10452, 'AVAILABLE', 'STANDARD' );
+INSERT INTO MECHANIC VALUES( 6,  07773, 'ON_LEAVE', 'STANDARD' );
+INSERT INTO MECHANIC VALUES( 8,  23302, 'BUSY', 'BEGINNER' );
+INSERT INTO MECHANIC VALUES( 10, 22205, 'BUSY', 'EXPERT' );
+INSERT INTO MECHANIC VALUES( 12, 10005, 'AVAILABLE', 'BEGINNER' );
+INSERT INTO MECHANIC VALUES( 14, 10000, 'AVAILABLE', 'BEGINNER' );
+
+
+CREATE TABLE TRUCK(
+        REGNUM          VARCHAR(10)     NOT NULL,
+        CAPACITY        NUMERIC(7)       NOT NULL,
+        WEIGHT          NUMERIC(5)       NOT NULL,
+        STATUS          VARCHAR(10)     NOT NULL,
+	  MANUF		VARCHAR(50),
+        CONSTRAINT TRUCK_PKEY PRIMARY KEY(REGNUM),
+        CONSTRAINT TRUCK_STATUS CHECK ( STATUS IN 
+                        ('AVAILABLE', 'USED', 'MAINTAINED')) );
+
+INSERT INTO TRUCK VALUES( 'PKR768', 1234, 3000, 'AVAILABLE','TOYOTA' );
+INSERT INTO TRUCK VALUES( 'SST005', 12000, 50000, 'USED','GENERAL MOTOR' );
+INSERT INTO TRUCK VALUES( 'QRT834', 5550, 400, 'USED','VOLVO' );
+INSERT INTO TRUCK VALUES( 'LUCY01', 100, 300, 'AVAILABLE','MAN' );
+INSERT INTO TRUCK VALUES( 'KKK007', 10000, 3000, 'MAINTAINED','GENERAL MOTOR' );
+INSERT INTO TRUCK VALUES( 'SYF777', 3333, 4566, 'MAINTAINED','VOLVO' );
+INSERT INTO TRUCK VALUES( 'PKR008', 22000, 8800, 'AVAILABLE','TOYOTA' );
+INSERT INTO TRUCK VALUES( 'XCF003', 30000, 10000, 'AVAILABLE','MAN' );
+INSERT INTO TRUCK VALUES( 'GFT008', 40000, 15000, 'AVAILABLE','MAN' );
+INSERT INTO TRUCK VALUES( 'LUCY02', 43000, 3000, 'AVAILABLE','VOLVO' );
+
+CREATE TABLE TRIP(
+        TNUM              NUMERIC(10)      NOT NULL,
+        LNUM              NUMERIC(8)       NOT NULL,
+        REGNUM            VARCHAR(10)     NOT NULL,
+        TRIP_DATE       DATE            NOT NULL,
+        CONSTRAINT TRIP_PKEY PRIMARY KEY (TNUM),
+        CONSTRAINT TRIP_FKEY1 FOREIGN KEY (LNUM) REFERENCES DRIVER(LNUM),
+        CONSTRAINT TRIP_FKEY2 FOREIGN KEY (REGNUM) REFERENCES TRUCK(REGNUM) );
+
+INSERT INTO TRIP VALUES( 1, 10001, 'PKR768', current_date - INTERVAL '3.6 months' );
+INSERT INTO TRIP VALUES( 2, 10002, 'SYF777', current_date - INTERVAL '3.6 months' );
+INSERT INTO TRIP VALUES( 3, 10001, 'KKK007', current_date - INTERVAL '3.6 months' );
+INSERT INTO TRIP VALUES( 4, 10003, 'PKR768', current_date - INTERVAL '2.8 months' );
+INSERT INTO TRIP VALUES( 5, 20002, 'PKR768', current_date - INTERVAL '2.8 months' );
+INSERT INTO TRIP VALUES( 6, 30005, 'SYF777', current_date - INTERVAL '2.5 months' );
+INSERT INTO TRIP VALUES( 7, 20005, 'KKK007', current_date - INTERVAL '2.5 months' );
+INSERT INTO TRIP VALUES( 8, 10001, 'PKR768', current_date - INTERVAL '2.5 months' );
+INSERT INTO TRIP VALUES( 9, 10002, 'QRT834', current_date - INTERVAL '2.5 months' );
+INSERT INTO TRIP VALUES(10, 30005, 'KKK007', current_date - INTERVAL '3.3 months' );
+INSERT INTO TRIP VALUES(11, 10003, 'SST005', current_date - INTERVAL '3.3 months' );
+INSERT INTO TRIP VALUES(12, 10002, 'PKR768', current_date - INTERVAL '3.3 months' );
+INSERT INTO TRIP VALUES(13, 20002, 'QRT834', current_date - INTERVAL '2.3 months' );
+INSERT INTO TRIP VALUES(14, 20002, 'PKR008', current_date - INTERVAL '2.4 months' );
+INSERT INTO TRIP VALUES(15, 20005, 'PKR768', current_date - INTERVAL '2.4 months' );
+INSERT INTO TRIP VALUES(16, 30005, 'SST005', current_date - INTERVAL '2 months' );
+INSERT INTO TRIP VALUES(17, 30005, 'QRT834', current_date - INTERVAL '2 months' );
+INSERT INTO TRIP VALUES(18, 10001, 'KKK007', current_date - INTERVAL '2 months' );
+INSERT INTO TRIP VALUES(19, 20005, 'SST005', current_date - INTERVAL '1.8 months' );
+INSERT INTO TRIP VALUES(20, 10003, 'PKR768', current_date - INTERVAL '1.5 months' );
+INSERT INTO TRIP VALUES(21, 10001, 'QRT834', current_date - INTERVAL '1.5 months' );
+INSERT INTO TRIP VALUES(22, 20005, 'PKR008', current_date - INTERVAL '1.3 months' );
+INSERT INTO TRIP VALUES(23, 10003, 'PKR768', current_date - INTERVAL '1.1 months' );
+INSERT INTO TRIP VALUES(24, 20002, 'SST005', current_date - INTERVAL '1.2 months' );
+INSERT INTO TRIP VALUES(25, 10001, 'PKR768', current_date - INTERVAL '1.2 months' );
+INSERT INTO TRIP VALUES(26, 10001, 'SYF777', current_date - INTERVAL '5.2 weeks' );
+INSERT INTO TRIP VALUES(27, 20002, 'KKK007', current_date - INTERVAL '7 weeks' );
+INSERT INTO TRIP VALUES(28, 30005, 'PKR768', current_date - INTERVAL '7 weeks' );
+INSERT INTO TRIP VALUES(29, 10001, 'QRT834', current_date - INTERVAL '5.1 weeks' );
+INSERT INTO TRIP VALUES(30, 10002, 'KKK007', current_date - INTERVAL '5.1 weeks' );
+INSERT INTO TRIP VALUES(31, 10003, 'SST005', current_date - INTERVAL '3.1 weeks' );
+INSERT INTO TRIP VALUES(32, 20002, 'PKR768', current_date - INTERVAL '3.1 weeks' );
+INSERT INTO TRIP VALUES(33, 30005, 'QRT834', current_date - INTERVAL '2.7 weeks' );
+INSERT INTO TRIP VALUES(34, 20005, 'PKR008', current_date - INTERVAL '2 weeks' );
+INSERT INTO TRIP VALUES(35, 10001, 'PKR768', current_date - INTERVAL '1.8 weeks' );
+INSERT INTO TRIP VALUES(36, 10003, 'SST005', current_date - INTERVAL '1.9 weeks' );
+INSERT INTO TRIP VALUES(37, 10001, 'PKR768', current_date - INTERVAL '1.9 weeks' );
+INSERT INTO TRIP VALUES(38, 10002, 'SYF777', current_date - INTERVAL '1.2 weeks' );
+INSERT INTO TRIP VALUES(39, 10001, 'KKK007', current_date - INTERVAL '1.2 weeks' );
+INSERT INTO TRIP VALUES(40, 10003, 'PKR768', current_date - INTERVAL '.6 weeks' );
+INSERT INTO TRIP VALUES(41, 20002, 'PKR768', current_date - INTERVAL '3 months' );
+INSERT INTO TRIP VALUES(42, 30005, 'SYF777', current_date - INTERVAL '2.7 weeks' );
+INSERT INTO TRIP VALUES(43, 20005, 'KKK007', current_date - INTERVAL '2.7 weeks' );
+INSERT INTO TRIP VALUES(44, 10001, 'PKR768', current_date - INTERVAL '2.7 weeks' );
+INSERT INTO TRIP VALUES(45, 10002, 'QRT834', current_date - INTERVAL '0.5 months' );
+INSERT INTO TRIP VALUES(46, 30005, 'KKK007', current_date - INTERVAL '2 weeks' );
+INSERT INTO TRIP VALUES(47, 10003, 'SST005', current_date - INTERVAL '2 weeks' );
+INSERT INTO TRIP VALUES(48, 10002, 'PKR768', current_date - INTERVAL '2 weeks' );
+INSERT INTO TRIP VALUES(49, 20002, 'QRT834', current_date - INTERVAL '2 months' );
+INSERT INTO TRIP VALUES(50, 20002, 'PKR008', current_date - INTERVAL '1.9 months' );
+INSERT INTO TRIP VALUES(51, 20005, 'PKR768', current_date - INTERVAL '1.8 months' );
+INSERT INTO TRIP VALUES(52, 30005, 'SST005', current_date - INTERVAL '1.8 months' );
+INSERT INTO TRIP VALUES(53, 30005, 'QRT834', current_date - INTERVAL '1.8 months' );
+INSERT INTO TRIP VALUES(54, 10001, 'KKK007', current_date - INTERVAL '1.7 months' );
+INSERT INTO TRIP VALUES(55, 20005, 'SST005', current_date - INTERVAL '1.7 months' );
+INSERT INTO TRIP VALUES(56, 10003, 'PKR768', current_date - INTERVAL '1.7 months' );
+INSERT INTO TRIP VALUES(57, 10001, 'QRT834', current_date - INTERVAL '1.6 months' );
+INSERT INTO TRIP VALUES(58, 20005, 'PKR008', current_date - INTERVAL '1.6 months' );
+INSERT INTO TRIP VALUES(59, 10003, 'PKR768', current_date - INTERVAL '1.3 months' );
+INSERT INTO TRIP VALUES(60, 20002, 'SST005', current_date - INTERVAL '1.3 months' );
+INSERT INTO TRIP VALUES(61, 10001, 'PKR768', current_date - INTERVAL '1.3 months' );
+INSERT INTO TRIP VALUES(62, 10001, 'SYF777', current_date - INTERVAL '1.2 months' );
+INSERT INTO TRIP VALUES(63, 20002, 'KKK007', current_date - INTERVAL '1.1 months' );
+INSERT INTO TRIP VALUES(64, 30005, 'PKR768', current_date - INTERVAL '1.0 months' );
+INSERT INTO TRIP VALUES(65, 10001, 'QRT834', current_date - INTERVAL '1.5 months' );
+INSERT INTO TRIP VALUES(66, 10003, 'KKK007', current_date - INTERVAL '1.4 months' );
+INSERT INTO TRIP VALUES(67, 10003, 'SST005', current_date - INTERVAL '1.4 months' );
+INSERT INTO TRIP VALUES(68, 20002, 'PKR768', current_date - INTERVAL '1.05 months' );
+INSERT INTO TRIP VALUES(69, 30005, 'QRT834', current_date - INTERVAL '1.07 months' );
+INSERT INTO TRIP VALUES(70, 20005, 'PKR008', current_date - INTERVAL '1.07 months' );
+INSERT INTO TRIP VALUES(71, 10001, 'PKR768', current_date - INTERVAL '1.07 months' );
+INSERT INTO TRIP VALUES(72, 10003, 'SST005', current_date - INTERVAL '4.5 weeks' );
+INSERT INTO TRIP VALUES(73, 10001, 'PKR768', current_date - INTERVAL '4.5 weeks' );
+INSERT INTO TRIP VALUES(74, 10002, 'SYF777', current_date - INTERVAL '7.2 weeks' );
+INSERT INTO TRIP VALUES(75, 10001, 'KKK007', current_date - INTERVAL '7.2 weeks' );
+INSERT INTO TRIP VALUES(76, 10003, 'PKR768', current_date - INTERVAL '0.9 months' );
+INSERT INTO TRIP VALUES(77, 20002, 'PKR768', current_date - INTERVAL '7.2 weeks' );
+INSERT INTO TRIP VALUES(78, 30005, 'SYF777', current_date - INTERVAL '7.2 weeks' );
+INSERT INTO TRIP VALUES(79, 20005, 'KKK007', current_date - INTERVAL '3.2 weeks' );
+INSERT INTO TRIP VALUES(80, 10001, 'PKR768', current_date - INTERVAL '3.2 weeks' );
+INSERT INTO TRIP VALUES(81, 10002, 'QRT834', current_date - INTERVAL '3.2 weeks' );
+INSERT INTO TRIP VALUES(82, 30005, 'KKK007', current_date - INTERVAL '3.0 weeks' );
+INSERT INTO TRIP VALUES(83, 10003, 'SST005', current_date - INTERVAL '3.0 weeks' );
+INSERT INTO TRIP VALUES(84, 10002, 'PKR768', current_date - INTERVAL '3.0 weeks' );
+INSERT INTO TRIP VALUES(85, 20002, 'QRT834', current_date - INTERVAL '2.8 weeks' );
+INSERT INTO TRIP VALUES(86, 20002, 'PKR008', current_date - INTERVAL '2.8 weeks' );
+INSERT INTO TRIP VALUES(87, 20005, 'PKR768', current_date - INTERVAL '2.2 weeks' );
+INSERT INTO TRIP VALUES(88, 30005, 'SST005', current_date - INTERVAL '2.2 weeks' );
+INSERT INTO TRIP VALUES(89, 30005, 'QRT834', current_date - INTERVAL '1.6 years' );
+INSERT INTO TRIP VALUES(90, 10001, 'KKK007', current_date - INTERVAL '1.9 weeks' );
+INSERT INTO TRIP VALUES(91, 20005, 'SST005', current_date - INTERVAL '1.2 weeks' );
+INSERT INTO TRIP VALUES(92, 10003, 'PKR768', current_date - INTERVAL '0.3 months' );
+INSERT INTO TRIP VALUES(93, 10001, 'QRT834', current_date - INTERVAL '0.3 months' );
+INSERT INTO TRIP VALUES(94, 20005, 'PKR008', current_date - INTERVAL '0.3 months' );
+INSERT INTO TRIP VALUES(95, 10003, 'PKR768', current_date - INTERVAL '0.2 months' );
+INSERT INTO TRIP VALUES(96, 20002, 'SST005', current_date - INTERVAL '0.2 months' );
+INSERT INTO TRIP VALUES(97, 10001, 'PKR768', current_date - INTERVAL '0.4 months' );
+INSERT INTO TRIP VALUES(98, 10001, 'SYF777', current_date - INTERVAL '.6 weeks' );
+INSERT INTO TRIP VALUES(99, 20002, 'KKK007', current_date - INTERVAL '0.1 months' );
+INSERT INTO TRIP VALUES(100, 30005, 'PKR768', current_date - INTERVAL '0.1 months' );
+INSERT INTO TRIP VALUES(101, 10001, 'QRT834', current_date - INTERVAL '0.1 months' );
+INSERT INTO TRIP VALUES(102, 10002, 'KKK007', current_date - INTERVAL '0.1 months' );
+INSERT INTO TRIP VALUES(103, 10003, 'SST005', current_date - INTERVAL '0.1 months' );
+INSERT INTO TRIP VALUES(104, 20002, 'PKR768', current_date - INTERVAL '1 months' );
+INSERT INTO TRIP VALUES(105, 30005, 'QRT834', current_date - INTERVAL '1 months' );
+INSERT INTO TRIP VALUES(106, 20005, 'PKR008', current_date );
+INSERT INTO TRIP VALUES(107, 10001, 'PKR768', current_date );
+INSERT INTO TRIP VALUES(108, 10003, 'SST005', current_date );
+
+
+CREATE TABLE TRIPLEG(
+        TNUM              NUMERIC(10)      NOT NULL,
+        LEGNUM            NUMERIC(2)       NOT NULL,
+        DEPARTURE       VARCHAR(30)     NOT NULL,
+        DESTINATION     VARCHAR(30)     NOT NULL,
+        CONSTRAINT TRIPLEG_PKEY PRIMARY KEY (TNUM, LEGNUM),
+        CONSTRAINT TRIPLEG_UNIQUE UNIQUE(TNUM, DEPARTURE, DESTINATION),
+        CONSTRAINT TRIPLEG_FKEY1 FOREIGN KEY (TNUM) REFERENCES TRIP(TNUM) );
+
+INSERT INTO TRIPLEG VALUES( 1, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES( 1, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES( 1, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES( 2, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES( 2, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES( 2, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES( 3, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES( 3, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES( 3, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES( 4, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES( 4, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES( 4, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES( 5, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES( 5, 2, 'Sydney', 'Adelaide');
+INSERT INTO TRIPLEG VALUES( 5, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES( 6, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES( 6, 2, 'Sydney', 'Adelaide');
+INSERT INTO TRIPLEG VALUES( 6, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES( 7, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES( 7, 2, 'Sydney', 'Adelaide');
+INSERT INTO TRIPLEG VALUES( 7, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES( 8, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES( 8, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES( 8, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES( 9, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(10, 1, 'Sydney', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(11, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(12, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(12, 2, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(13, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(13, 2, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(14, 1, 'Wollongong', 'Sydney');
+INSERT INTO TRIPLEG VALUES(15, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(15, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(16, 1, 'Sydney', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(16, 2, 'Wollongong', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(16, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES(17, 1, 'Sydney', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(17, 2, 'Wollongong', 'Sydney');
+INSERT INTO TRIPLEG VALUES(18, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(18, 2, 'Sydney', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(18, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES(19, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(19, 2, 'Sydney', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(19, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES(20, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(20, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(20, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES(21, 1, 'Wollongong', 'Sydney');
+INSERT INTO TRIPLEG VALUES(21, 2, 'Sydney', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(21, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES(22, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(22, 2, 'Sydney', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(22, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES(23, 1, 'Wollongong', 'Sydney');
+INSERT INTO TRIPLEG VALUES(23, 2, 'Sydney', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(23, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES(24, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(24, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(24, 3, 'Adelaide', 'Sydney');
+INSERT INTO TRIPLEG VALUES(25, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(25, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(25, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(25, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(26, 1, 'Brisbane', 'Sydney'); 
+INSERT INTO TRIPLEG VALUES(26, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(26, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(27, 1, 'Sydney', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(27, 2, 'Wollongong', 'Perth' );
+INSERT INTO TRIPLEG VALUES(27, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(28, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(28, 2, 'Melbourne', 'Perth' );
+INSERT INTO TRIPLEG VALUES(28, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(29, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(29, 2, 'Melbourne', 'Perth' );
+INSERT INTO TRIPLEG VALUES(29, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(30, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(30, 2, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(31, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(31, 2, 'Melbourne', 'Perth' );
+INSERT INTO TRIPLEG VALUES(31, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(32, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(32, 2, 'Melbourne', 'Perth' );
+INSERT INTO TRIPLEG VALUES(32, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(33, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(33, 2, 'Melbourne', 'Perth' );
+INSERT INTO TRIPLEG VALUES(33, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(34, 1, 'Wollongong', 'Sydney');
+INSERT INTO TRIPLEG VALUES(34, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(34, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(35, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(35, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(35, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(35, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(36, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(37, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(37, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(37, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(37, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(37, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(38, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(38, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(38, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(38, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(39, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(39, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(39, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(40, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(40, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(40, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(40, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(40, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(41, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(41, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(41, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(41, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(42, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(42, 2, 'Newcastle', 'Sydney');
+INSERT INTO TRIPLEG VALUES(42, 3, 'Sydney', 'Perth');
+INSERT INTO TRIPLEG VALUES(43, 1, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(43, 2, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(43, 3, 'Rockhampton', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(44, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(44, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(44, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(44, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(45, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(45, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(45, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(45, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(45, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(46, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(46, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(46, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(46, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(47, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(47, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(47, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(48, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(48, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(48, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(48, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(49, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(49, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(49, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(49, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(49, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(50, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(50, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(50, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(50, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(51, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(51, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(51, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(52, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(52, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(52, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(52, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(56, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(56, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(56, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(56, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(56, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(57, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(57, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(57, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(57, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(58, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(58, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(58, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(59, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(59, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(59, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(59, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(60, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(60, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(60, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(60, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(60, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(61, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(61, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(61, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(61, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(62, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(62, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(62, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(63, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(63, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(63, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(63, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(64, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(64, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(64, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(64, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(64, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(65, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(65, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(65, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(65, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(66, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(66, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(66, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(67, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(67, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(67, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(67, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(68, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(68, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(68, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(68, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(68, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(69, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(69, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(69, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(69, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(70, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(70, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(70, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(71, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(71, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(71, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(71, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(71, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(72, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(72, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(72, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(72, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(72, 5, 'Sydney', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(72, 6, 'Wollongong', 'Canberra');
+INSERT INTO TRIPLEG VALUES(72, 7, 'Canberra', 'Perth');
+INSERT INTO TRIPLEG VALUES(72, 8, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(73, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(73, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(73, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(74, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(74, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(74, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(74, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(75, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(75, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(75, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(75, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(75, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(76, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(76, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(76, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(76, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(77, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(77, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(77, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(78, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(78, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(78, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(78, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(79, 1, 'Sydney', 'Goldcoast');
+INSERT INTO TRIPLEG VALUES(80, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(80, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(80, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(80, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(80, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(81, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(81, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(81, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(81, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(82, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(82, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(82, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(83, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(83, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(83, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(83, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(84, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(84, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(84, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(84, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(84, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(85, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(85, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(85, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(85, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(86, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(86, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(86, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(87, 1, 'Brisbane', 'Sydney');
+INSERT INTO TRIPLEG VALUES(88, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(88, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(88, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(88, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(89, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(89, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(89, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(89, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(89, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(90, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(90, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(90, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(90, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(91, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(91, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(91, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(92, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(92, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(92, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(92, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(93, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(93, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(93, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(93, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(93, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(94, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(94, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(94, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(94, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(95, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(95, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(95, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(96, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(96, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(96, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(96, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(97, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(97, 2, 'Melbourne', 'Hobart');
+INSERT INTO TRIPLEG VALUES(97, 3, 'Hobart', 'Perth');
+INSERT INTO TRIPLEG VALUES(97, 4, 'Perth', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(97, 5, 'Adelaide', 'Wollongong');
+INSERT INTO TRIPLEG VALUES(98, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(98, 2, 'Melbourne', 'Adelaide');
+INSERT INTO TRIPLEG VALUES(98, 3, 'Adelaide', 'Perth');
+INSERT INTO TRIPLEG VALUES(98, 4, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(99, 1, 'Sydney', 'Newcastle');
+INSERT INTO TRIPLEG VALUES(99, 2, 'Newcastle', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(99, 3, 'Brisbane', 'Rockhampton');
+INSERT INTO TRIPLEG VALUES(100, 1, 'Melbourne', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(101, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(101, 2, 'Sydney', 'Perth' );
+INSERT INTO TRIPLEG VALUES(101, 3, 'Perth', 'Sydney');
+INSERT INTO TRIPLEG VALUES(101, 4, 'Sydney', 'Brisbane');
+INSERT INTO TRIPLEG VALUES(102, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(102, 2, 'Melbourne', 'Perth');
+INSERT INTO TRIPLEG VALUES(102, 3, 'Perth', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(103, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(103, 2, 'Melbourne', 'Perth');
+INSERT INTO TRIPLEG VALUES(103, 3, 'Perth', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(104, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(104, 2, 'Melbourne', 'Perth');
+INSERT INTO TRIPLEG VALUES(104, 3, 'Perth', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(105, 1, 'Sydney', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(105, 2, 'Melbourne', 'Perth');
+INSERT INTO TRIPLEG VALUES(105, 3, 'Perth', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(106, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(106, 2, 'Sydney', 'Perth');
+INSERT INTO TRIPLEG VALUES(106, 3, 'Perth', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(107, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(107, 2, 'Sydney', 'Perth');
+INSERT INTO TRIPLEG VALUES(107, 3, 'Perth', 'Melbourne');
+INSERT INTO TRIPLEG VALUES(108, 1, 'Melbourne', 'Sydney');
+INSERT INTO TRIPLEG VALUES(108, 2, 'Sydney', 'Perth');
+INSERT INTO TRIPLEG VALUES(108, 3, 'Perth', 'Melbourne');
+
+
+
+
+CREATE TABLE MAINTENANCE(
+	REGNUM	VARCHAR(10)	NOT NULL,
+	LNUM		NUMERIC(8)	NOT NULL,
+	TIME		NUMERIC(6)	        ,
+	MAINTENANCE_DATE DATE		NOT NULL,
+	CONSTRAINT MAINTENANCE_PKEY PRIMARY KEY(REGNUM, LNUM, MAINTENANCE_DATE),
+	CONSTRAINT MAINTENANCE_FKEY1 FOREIGN KEY (REGNUM) REFERENCES TRUCK(REGNUM),
+	CONSTRAINT MAINTENANCE_FKEY2 FOREIGN KEY (LNUM) REFERENCES MECHANIC(LNUM));
+
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 07773, 40, current_date - INTERVAL '3.6 months' );
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 10345, 40, current_date - INTERVAL '3.9 months' );
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 07773, 40, current_date - INTERVAL '3.7 months' );
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 10345, 40, current_date - INTERVAL '3.3 months' );
+INSERT INTO MAINTENANCE VALUES( 'SYF777', 07773, 30, current_date - INTERVAL '3.6 months' );
+INSERT INTO MAINTENANCE VALUES( 'SYF777', 10345, 200, current_date - INTERVAL '3.1 months' );
+INSERT INTO MAINTENANCE VALUES( 'SYF777', 07773, 30,  current_date - INTERVAL '6.4 months' );
+INSERT INTO MAINTENANCE VALUES( 'SYF777', 07773, 30,  current_date - INTERVAL '5.4 months' );
+INSERT INTO MAINTENANCE VALUES( 'LUCY01', 22205, 200, current_date - INTERVAL '5.5 months' );
+INSERT INTO MAINTENANCE VALUES( 'LUCY01', 07773, 200, current_date - INTERVAL '3 months' );
+INSERT INTO MAINTENANCE VALUES( 'PKR768', 10345, 200, current_date - INTERVAL '0.9 years' );
+INSERT INTO MAINTENANCE VALUES( 'SYF777', 07773, 30,  current_date - INTERVAL '3.7 months' );
+INSERT INTO MAINTENANCE VALUES( 'PKR768', 07773, 200, current_date - INTERVAL '3  years' );
+INSERT INTO MAINTENANCE VALUES( 'LUCY01', 022205, 200, current_date - INTERVAL '1.5 years' );
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 07773, 200, current_date - INTERVAL '3.3 months' );
+INSERT INTO MAINTENANCE VALUES( 'KKK007', 23302, 300, current_date - INTERVAL '2.3  years' );
+INSERT INTO MAINTENANCE VALUES( 'PKR768', 10345, 600, current_date - INTERVAL '1.3  years' );
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 10452, 50,  current_date - INTERVAL '1.3 months' );
+INSERT INTO MAINTENANCE VALUES( 'KKK007', 22205, 250, current_date - INTERVAL '1.2 years' );
+INSERT INTO MAINTENANCE VALUES( 'SST005', 10005, 30,  current_date - INTERVAL '4.8 months' );
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 22205, 50,  current_date - INTERVAL '3.8 months' );
+INSERT INTO MAINTENANCE VALUES( 'PKR008', 10452, 300, current_date - INTERVAL '3.2 months' );
+INSERT INTO MAINTENANCE VALUES( 'PKR768', 22205, 20,  current_date - INTERVAL '3.0 months' );
+INSERT INTO MAINTENANCE VALUES( 'SST005', 10345, 250, current_date - INTERVAL '2.8 months' );
+INSERT INTO MAINTENANCE VALUES( 'PKR768', 10345, 20, current_date - INTERVAL '12 months' );
+INSERT INTO MAINTENANCE VALUES( 'SYF777', 07773, 300,  current_date - INTERVAL '2 months' );
+INSERT INTO MAINTENANCE VALUES( 'PKR768', 07773, 460, current_date - INTERVAL '2 months' );
+INSERT INTO MAINTENANCE VALUES( 'LUCY01', 07773, 40, current_date - INTERVAL '3.1 months' );
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 07773, 40, current_date - INTERVAL '3.2 months' );
+INSERT INTO MAINTENANCE VALUES( 'KKK007', 23302, 500, current_date - INTERVAL '2 years' );
+INSERT INTO MAINTENANCE VALUES( 'PKR768', 10345, 600, current_date - INTERVAL '1.8 months' );
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 10452, 50,  current_date - INTERVAL '2.2 weeks' );
+INSERT INTO MAINTENANCE VALUES( 'KKK007', 22205, 400, current_date - INTERVAL '1.9 years' );
+INSERT INTO MAINTENANCE VALUES( 'SST005', 10005, 30,  current_date - INTERVAL '2.9 years' );
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 22205, 50,  current_date );
+INSERT INTO MAINTENANCE VALUES( 'PKR008', 10452, 50, current_date - INTERVAL '2.5 years' );
+INSERT INTO MAINTENANCE VALUES( 'PKR768', 22205, 50,  current_date - INTERVAL '1.6 years' );
+INSERT INTO MAINTENANCE VALUES( 'SST005', 10345, 850, current_date - INTERVAL '2 years' );
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 07773, 20, current_date - INTERVAL '1.9 months' );
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 22205, 70,  current_date - INTERVAL '0.9 months' );
+INSERT INTO MAINTENANCE VALUES( 'PKR008', 10452, 200, current_date - INTERVAL '0.95 months' );
+INSERT INTO MAINTENANCE VALUES( 'QRT834', 10452, 90,  current_date );
+
+-- COMMIT;
+
+-- Display the count
+select 	(select count(*) from trkemployee) as TRKEmployeeCount,
+	(select count(*) from driver) as DriverCount,
+	(select count(*) from mechanic) as MechanicCount,
+	(select count(*) from trip) as Trip,
+	(select count(*) from tripLeg) as TripLegCount,
+	(select count(*) from maintenance) as MaintenanceCount;
+--
