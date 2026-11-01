@@ -1,32 +1,22 @@
-﻿
 
--- ---------------------------------------------------------------------------
-
--- Re-declared from Task 1 (definition only, no executions).
-
--- Inserts a TRKEMPLOYEE row plus exactly one sub-type row, and refuses to
-
--- let the same E# or L# exist in both DRIVER and MECHANIC.
-
--- ---------------------------------------------------------------------------
 
 CREATE OR REPLACE PROCEDURE add_employee(
 
-    p_enum       NUMERIC,                  -- E#
+    p_enum       NUMERIC,
 
-    p_name       VARCHAR,                  -- NAME
+    p_name       VARCHAR,
 
-    p_dob        DATE,                     -- DOB
+    p_dob        DATE,
 
-    p_address    VARCHAR,                  -- ADDRESS
+    p_address    VARCHAR,
 
-    p_hiredate   DATE,                     -- HIREDATE
+    p_hiredate   DATE,
 
-    p_lnum       NUMERIC,                  -- L#
+    p_lnum       NUMERIC,
 
-    p_status     VARCHAR,                  -- STATUS
+    p_status     VARCHAR,
 
-    p_experience VARCHAR DEFAULT NULL,     -- EXPERIENCE (mechanic only)
+    p_experience VARCHAR DEFAULT NULL,
 
     p_role       VARCHAR DEFAULT 'DRIVER'
 
@@ -38,7 +28,7 @@ AS $$
 
 BEGIN
 
-    -- 1. role sanity: only the two sub-types exist
+
 
     IF p_role NOT IN ('DRIVER', 'MECHANIC') THEN
 
@@ -47,10 +37,6 @@ BEGIN
     END IF;
 
 
-
-    -- 2. role/attribute coupling:
-
-    --    MECHANIC.EXPERIENCE is NOT NULL, TRKEMPLOYEE has no such column
 
     IF p_role = 'MECHANIC' AND p_experience IS NULL THEN
 
@@ -65,12 +51,6 @@ BEGIN
     END IF;
 
 
-
-    -- 3. DISJOINTNESS GUARD - before any INSERT, both keys, opposite table.
-
-    --    ENUM is the shared primary key; LNUM is an alternate key whose
-
-    --    UNIQUE constraint is scoped per table, so it must be checked here.
 
     IF p_role = 'MECHANIC' AND EXISTS (
 
@@ -108,15 +88,11 @@ BEGIN
 
 
 
-    -- 4. super-type row first: the child FK needs this row to exist
-
     INSERT INTO TRKEMPLOYEE (ENUM, NAME, DOB, ADDRESS, HIREDATE)
 
     VALUES (p_enum, p_name, p_dob, p_address, p_hiredate);
 
 
-
-    -- 5. exactly one sub-type row
 
     IF p_role = 'DRIVER' THEN
 
@@ -138,26 +114,6 @@ $$;
 
 CREATE PROCEDURE
 
-
--- ===========================================================================
-
--- TASK 3 - stored function longtrip(DLNUM)
-
---
-
--- Legs in the driver's longest trip, 0 when the driver has no trips.
-
---   * LEFT JOIN keeps trips that have no TRIPLEG rows in the candidate set.
-
---   * count(l.LEGNUM) not count(*): a null-extended legless trip would count
-
---     as 1 with count(*), and as 0 when counting a non-null column.
-
---   * max() over an empty set is NULL, so COALESCE supplies the required 0.
-
--- STABLE: reads tables, modifies nothing.
-
--- ===========================================================================
 
 CREATE OR REPLACE FUNCTION longtrip(p_lnum NUMERIC)
 
@@ -201,20 +157,6 @@ $$;
 
 CREATE FUNCTION
 
-
--- ---------------------------------------------------------------------------
-
--- Task 3 report: every driver's name and the length of their longest trip.
-
--- NAME lives on TRKEMPLOYEE while longtrip() takes DRIVER.LNUM, so the tables
-
--- are joined on ENUM and the function is fed the licence. The brief's example
-
--- (SELECT NAME, LONGTRIP(L#) FROM DRIVER) cannot run as printed because
-
--- DRIVER has no NAME column.
-
--- ---------------------------------------------------------------------------
 
 SELECT e.NAME,
 

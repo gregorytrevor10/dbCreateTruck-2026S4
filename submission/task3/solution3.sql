@@ -1,4 +1,4 @@
-﻿\set ECHO all
+\set ECHO all
 
 CREATE OR REPLACE PROCEDURE add_employee(
     p_enum       NUMERIC,
