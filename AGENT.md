@@ -17,9 +17,9 @@ Deliverables are written under `submission/`, one folder per task:
 
 | Folder | Agent writes | Student writes |
 | --- | --- | --- |
-| `submission/solution1/` | `solution1.sql` | `solution1.pdf` |
-| `submission/solution2/` | `solution2.sql` | `solution2.pdf` |
-| `submission/solution3/` | `solution3.sql` | `solution3.pdf` |
+| `submission/task1/` | `solution1.sql` | `solution1.pdf` |
+| `submission/task2/` | `solution2.sql` | `solution2.pdf` |
+| `submission/task3/` | `solution3.sql` | `solution3.pdf` |
 
 Each `solutionN.sql` starts with `\set ECHO all`, and the agent may capture its run output as text.
 
