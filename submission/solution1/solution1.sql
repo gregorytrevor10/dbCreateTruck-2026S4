@@ -35,8 +35,14 @@ BEGIN
     -- 2. Role/attribute coupling.
     --    MECHANIC.EXPERIENCE is NOT NULL  -> mechanic must supply a value
     --    TRKEMPLOYEE has no EXPERIENCE     -> driver must not supply one
-    -- TODO: two IF ... RAISE EXCEPTION blocks, mirrored, one per role.
     -- -------------------------------------------------------------------
+    IF p_role = 'MECHANIC' AND p_experience IS NULL THEN
+        RAISE EXCEPTION 'a MECHANIC needs an experience level (BEGINNER, STANDARD, EXPERT)';
+    END IF;
+
+    IF p_role = 'DRIVER' AND p_experience IS NOT NULL THEN
+        RAISE EXCEPTION 'a DRIVER cannot have an experience level, got %', p_experience;
+    END IF;
 
 
     -- -------------------------------------------------------------------
@@ -46,13 +52,27 @@ BEGIN
     --      ENUM  - the shared primary key
     --      LNUM  - alternate key; UNIQUE(LNUM) is per-table only, so the
     --              same licence can legally sit in both sub-tables
-    --    Shape:
-    --      IF p_role = 'MECHANIC' AND EXISTS ( ... FROM DRIVER ... )
-    --          THEN RAISE EXCEPTION ... USING ERRCODE = ...;
-    --      IF p_role = 'DRIVER'   AND EXISTS ( ... FROM MECHANIC ... )
-    --          THEN RAISE EXCEPTION ... USING ERRCODE = ...;
-    --    Inside the EXISTS: WHERE ENUM = p_enum OR LNUM = p_lnum
-    -- TODO: write both blocks.
+    --    Both keys, opposite table, before any INSERT.
+    -- -------------------------------------------------------------------
+    IF p_role = 'MECHANIC' AND EXISTS (
+           SELECT 1 FROM DRIVER
+            WHERE ENUM = p_enum OR LNUM = p_lnum)
+    THEN
+        RAISE EXCEPTION
+            'employee % / licence % already exists as a DRIVER; drivers and mechanics must be disjoint',
+            p_enum, p_lnum
+            USING ERRCODE = 'P0001';
+    END IF;
+
+    IF p_role = 'DRIVER' AND EXISTS (
+           SELECT 1 FROM MECHANIC
+            WHERE ENUM = p_enum OR LNUM = p_lnum)
+    THEN
+        RAISE EXCEPTION
+            'employee % / licence % already exists as a MECHANIC; drivers and mechanics must be disjoint',
+            p_enum, p_lnum
+            USING ERRCODE = 'P0001';
+    END IF;
     -- -------------------------------------------------------------------
 
 
@@ -107,17 +127,44 @@ SELECT * FROM TRKEMPLOYEE WHERE ENUM = 16;
 SELECT * FROM DRIVER      WHERE ENUM = 16;
 SELECT * FROM MECHANIC    WHERE ENUM = 16;
 
--- Second execution: MUST FAIL - E# 16 is now a DRIVER, so the guard has to
--- reject the same employee being added as a MECHANIC. Enable once TODO 3
--- (the disjointness guard) is written, otherwise it will slip through.
+-- Second execution: MUST FAIL.
+--
+-- Lionel Messi signs on as a MECHANIC but quotes an existing driver's
+-- licence: L# 40002 already belongs to Cristiano Ronaldo (a DRIVER).
+-- E# 17 is unused, so the primary key cannot catch this. Neither can
+-- UNIQUE(LNUM), because that is scoped inside each sub-type table -
+-- 40002 is free within MECHANIC. The only thing that can reject this
+-- call is the disjointness guard, which is the point of the exercise.
+--
+-- The guard in step 3 rejects it before any row is written.
+--
+CALL add_employee(
+    p_enum       => 17,
+    p_name       => 'Lionel Messi',
+    p_dob        => DATE '1987-06-24',
+    p_address    => '10 Fake St, Wollongong NSW 2500',
+    p_hiredate   => CURRENT_DATE,
+    p_lnum       => 40002,
+    p_status     => 'AVAILABLE',
+    p_experience => 'EXPERT',
+    p_role       => 'MECHANIC' );
+
+-- Variant B (optional): same employee number as Cristiano, fresh licence.
+-- With the guard this raises the disjointness message; without it the
+-- TRKEMPLOYEE primary key raises 23505 instead, which demonstrates the
+-- wrong constraint.
 --
 -- CALL add_employee(
 --     p_enum       => 16,
---     p_name       => 'Impostor',
---     p_dob        => DATE '1990-01-01',
---     p_address    => '9 Fake St, Sydney NSW 2000',
+--     p_name       => 'Lionel Messi',
+--     p_dob        => DATE '1987-06-24',
+--     p_address    => '10 Fake St, Wollongong NSW 2500',
 --     p_hiredate   => CURRENT_DATE,
 --     p_lnum       => 49999,
 --     p_status     => 'AVAILABLE',
 --     p_experience => 'EXPERT',
 --     p_role       => 'MECHANIC' );
+
+-- After a rejected CALL nothing may be written.
+SELECT * FROM TRKEMPLOYEE WHERE ENUM = 17;      -- expect 0 rows
+SELECT * FROM MECHANIC    WHERE LNUM = 40002;   -- expect 0 rows
