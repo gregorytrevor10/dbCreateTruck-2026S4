@@ -2,9 +2,13 @@
 -- CSCI235 Assignment 2 - Task 1
 -- Stored procedure: add_employee
 --
--- SCAFFOLD ONLY. Blocks marked TODO are yours to write.
+-- Inserts full employee information (TRKEMPLOYEE + exactly one of DRIVER or
+-- MECHANIC) and enforces the disjointness rule: an employee cannot be both.
+-- The check runs BEFORE any INSERT, against both keys (E# and L#).
+--
 -- Target: database `tpchr`, role `tpchr`.
--- This file compiles as-is (empty guard = current DDL behaviour).
+-- Note: the brief labels the Task 1 script "solution3.sql" in one place; its
+-- own submission list maps Task 1 to solution1.sql, which is used here.
 -- ===========================================================================
 
 -- Echo every statement so the terminal transcript doubles as the report.
