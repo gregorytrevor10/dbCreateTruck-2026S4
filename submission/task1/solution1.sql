@@ -1,45 +1,24 @@
--- ===========================================================================
--- CSCI235 Assignment 2 - Task 1
--- Stored procedure: add_employee
---
--- Inserts full employee information (TRKEMPLOYEE + exactly one of DRIVER or
--- MECHANIC) and enforces the disjointness rule: an employee cannot be both.
--- The check runs BEFORE any INSERT, against both keys (E# and L#).
---
--- Target: database `tpchr`, role `tpchr`.
--- Note: the brief labels the Task 1 script "solution3.sql" in one place; its
--- own submission list maps Task 1 to solution1.sql, which is used here.
--- ===========================================================================
-
--- Echo every statement so the terminal transcript doubles as the report.
-\set ECHO all
+﻿\set ECHO all
 
 CREATE OR REPLACE PROCEDURE add_employee(
-    p_enum       NUMERIC,                  -- E#        -> TRKEMPLOYEE.ENUM  (12,0)
-    p_name       VARCHAR,                  -- NAME      NOT NULL, max 50
-    p_dob        DATE,                     -- DOB       nullable
-    p_address    VARCHAR,                  -- ADDRESS   NOT NULL, max 300
-    p_hiredate   DATE,                     -- HIREDATE  NOT NULL
-    p_lnum       NUMERIC,                  -- L#        -> DRIVER/MECHANIC.LNUM (8,0)
-    p_status     VARCHAR,                  -- STATUS    vocabulary differs per sub-type
-    p_experience VARCHAR DEFAULT NULL,     -- EXPERIENCE: mechanics only
-    p_role       VARCHAR DEFAULT 'DRIVER'  -- 'DRIVER' | 'MECHANIC'
+    p_enum       NUMERIC,
+    p_name       VARCHAR,
+    p_dob        DATE,
+    p_address    VARCHAR,
+    p_hiredate   DATE,
+    p_lnum       NUMERIC,
+    p_status     VARCHAR,
+    p_experience VARCHAR DEFAULT NULL,
+    p_role       VARCHAR DEFAULT 'DRIVER'
 )
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    -- -------------------------------------------------------------------
-    -- 1. Role sanity: only the two sub-types exist.
-    -- -------------------------------------------------------------------
+
     IF p_role NOT IN ('DRIVER', 'MECHANIC') THEN
         RAISE EXCEPTION 'unknown role %, expected DRIVER or MECHANIC', p_role;
     END IF;
 
-    -- -------------------------------------------------------------------
-    -- 2. Role/attribute coupling.
-    --    MECHANIC.EXPERIENCE is NOT NULL  -> mechanic must supply a value
-    --    TRKEMPLOYEE has no EXPERIENCE     -> driver must not supply one
-    -- -------------------------------------------------------------------
     IF p_role = 'MECHANIC' AND p_experience IS NULL THEN
         RAISE EXCEPTION 'a MECHANIC needs an experience level (BEGINNER, STANDARD, EXPERT)';
     END IF;
@@ -48,16 +27,6 @@ BEGIN
         RAISE EXCEPTION 'a DRIVER cannot have an experience level, got %', p_experience;
     END IF;
 
-
-    -- -------------------------------------------------------------------
-    -- 3. DISJOINTNESS GUARD  <-- the marked part of Task 1.
-    --    Must run BEFORE any INSERT so a rejection leaves no rows behind.
-    --    Two keys can collide:
-    --      ENUM  - the shared primary key
-    --      LNUM  - alternate key; UNIQUE(LNUM) is per-table only, so the
-    --              same licence can legally sit in both sub-tables
-    --    Both keys, opposite table, before any INSERT.
-    -- -------------------------------------------------------------------
     IF p_role = 'MECHANIC' AND EXISTS (
            SELECT 1 FROM DRIVER
             WHERE ENUM = p_enum OR LNUM = p_lnum)
@@ -77,24 +46,10 @@ BEGIN
             p_enum, p_lnum
             USING ERRCODE = 'P0001';
     END IF;
-    -- -------------------------------------------------------------------
 
-
-    -- -------------------------------------------------------------------
-    -- 4. Super-type row first: the child FK needs this row to already exist.
-    --    COMMENT is omitted on purpose - nullable, and not one of the
-    --    employee attributes listed in the specification.
-    -- -------------------------------------------------------------------
     INSERT INTO TRKEMPLOYEE (ENUM, NAME, DOB, ADDRESS, HIREDATE)
     VALUES (p_enum, p_name, p_dob, p_address, p_hiredate);
 
-    -- -------------------------------------------------------------------
-    -- 5. Exactly one sub-type row. IF/ELSE, never both - inserting both
-    --    would create the very violation step 3 is meant to prevent.
-    --    Note the vocabulary split:
-    --      DRIVER.STATUS   allows 'ON LEAVE'   (space)
-    --      MECHANIC.STATUS allows 'ON_LEAVE'   (underscore)
-    -- -------------------------------------------------------------------
     IF p_role = 'DRIVER' THEN
         INSERT INTO DRIVER (ENUM, LNUM, STATUS)
         VALUES (p_enum, p_lnum, p_status);
@@ -104,16 +59,6 @@ BEGIN
     END IF;
 END;
 $$;
-
--- ===========================================================================
--- EXECUTIONS
--- ===========================================================================
--- First execution: a brand-new DRIVER. E# 16 and L# 40002 are unused on a
--- fresh seed, so nothing can collide. Already executed successfully.
---
--- WARNING: re-running this file re-runs this CALL. On an already-populated
--- database it fails with 23505 (trkemployee_pkey). Comment it out before
--- re-running the script; leave it live for the report run.
 
 CALL add_employee(
     p_enum       => 16,
@@ -126,22 +71,10 @@ CALL add_employee(
     p_experience => NULL,
     p_role       => 'DRIVER' );
 
--- Proof it landed in exactly two tables.
 SELECT * FROM TRKEMPLOYEE WHERE ENUM = 16;
 SELECT * FROM DRIVER      WHERE ENUM = 16;
 SELECT * FROM MECHANIC    WHERE ENUM = 16;
 
--- Second execution: MUST FAIL.
---
--- Lionel Messi signs on as a MECHANIC but quotes an existing driver's
--- licence: L# 40002 already belongs to Cristiano Ronaldo (a DRIVER).
--- E# 17 is unused, so the primary key cannot catch this. Neither can
--- UNIQUE(LNUM), because that is scoped inside each sub-type table -
--- 40002 is free within MECHANIC. The only thing that can reject this
--- call is the disjointness guard, which is the point of the exercise.
---
--- The guard in step 3 rejects it before any row is written.
---
 CALL add_employee(
     p_enum       => 17,
     p_name       => 'Lionel Messi',
@@ -153,6 +86,5 @@ CALL add_employee(
     p_experience => 'EXPERT',
     p_role       => 'MECHANIC' );
 
--- After a rejected CALL nothing may be written.
-SELECT * FROM TRKEMPLOYEE WHERE ENUM = 17;      -- expect 0 rows
-SELECT * FROM MECHANIC    WHERE LNUM = 40002;   -- expect 0 rows
+SELECT * FROM TRKEMPLOYEE WHERE ENUM = 17;
+SELECT * FROM MECHANIC    WHERE LNUM = 40002;
