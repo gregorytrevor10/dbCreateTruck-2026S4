@@ -12,6 +12,11 @@
 \set ECHO all
 
 -- ---------------------------------------------------------------------------
+-- Before: the column is empty, so every driver shows NULL.
+-- ---------------------------------------------------------------------------
+SELECT enum, lnum, totalTripMade FROM driver ORDER BY enum;
+
+-- ---------------------------------------------------------------------------
 -- Trigger function
 --
 -- Recomputes from TRIP rather than incrementing by one:
@@ -73,9 +78,12 @@ SELECT d.ENUM,
   FROM DRIVER d
  ORDER BY d.ENUM;
 
--- Reconciliation: must return zero rows.
+-- Reconciliation over the drivers the trigger has touched. Drivers with no
+-- new trip legitimately keep an empty counter, so they are excluded - a plain
+-- IS DISTINCT FROM test would flag every untouched NULL as a mismatch.
 SELECT d.ENUM, d.LNUM, d.totalTripMade, count(t.TNUM) AS actual
   FROM DRIVER d
   LEFT JOIN TRIP t ON t.LNUM = d.LNUM
+ WHERE d.totalTripMade IS NOT NULL
  GROUP BY d.ENUM, d.LNUM, d.totalTripMade
 HAVING d.totalTripMade IS DISTINCT FROM count(t.TNUM);

@@ -8,16 +8,15 @@ AS $$
 DECLARE
     v_max NUMERIC;
 BEGIN
-    SELECT max(s.legs)
-      INTO v_max
-      FROM (SELECT t.TNUM,
-                   count(l.LEGNUM) AS legs
-              FROM TRIP t
-              LEFT JOIN TRIPLEG l ON l.TNUM = t.TNUM
-             WHERE t.LNUM = p_lnum
-             GROUP BY t.TNUM) s;
-
-    RETURN COALESCE(v_max, 0);
+SELECT max(s.legs)
+INTO v_max
+FROM (SELECT t.TNUM,
+count(l.LEGNUM) AS legs
+FROM TRIP t
+LEFT JOIN TRIPLEG l ON l.TNUM = t.TNUM
+WHERE t.LNUM = p_lnum
+GROUP BY t.TNUM) s;
+RETURN COALESCE(v_max, 0);
 END;
 $$;
 

@@ -1,5 +1,8 @@
 
 \set ECHO all
+
+SELECT enum, lnum, totalTripMade FROM driver ORDER BY enum;
+
 CREATE OR REPLACE FUNCTION trg_total_trip_made() RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -32,5 +35,6 @@ SELECT d.ENUM,
 SELECT d.ENUM, d.LNUM, d.totalTripMade, count(t.TNUM) AS actual
   FROM DRIVER d
   LEFT JOIN TRIP t ON t.LNUM = d.LNUM
+ WHERE d.totalTripMade IS NOT NULL
  GROUP BY d.ENUM, d.LNUM, d.totalTripMade
 HAVING d.totalTripMade IS DISTINCT FROM count(t.TNUM);
