@@ -9,6 +9,7 @@ I'm a student, first time doing PSQL with a lab paper from an educational instit
 - Describe everything with comments, for learning.
 - Break the work down into issues on the remote (GitHub) repository.
 - Interact with GitHub using the `gh` CLI tool.
+- **Every closed issue must end with a comment.** Post the closing comment first (what was done, evidence or output, anything carried forward), then close. Never close an issue silently.
 
 ## Submission layout
 
