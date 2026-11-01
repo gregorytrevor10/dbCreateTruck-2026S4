@@ -153,22 +153,6 @@ CALL add_employee(
     p_experience => 'EXPERT',
     p_role       => 'MECHANIC' );
 
--- Variant B (optional): same employee number as Cristiano, fresh licence.
--- With the guard this raises the disjointness message; without it the
--- TRKEMPLOYEE primary key raises 23505 instead, which demonstrates the
--- wrong constraint.
---
--- CALL add_employee(
---     p_enum       => 16,
---     p_name       => 'Lionel Messi',
---     p_dob        => DATE '1987-06-24',
---     p_address    => '10 Fake St, Wollongong NSW 2500',
---     p_hiredate   => CURRENT_DATE,
---     p_lnum       => 49999,
---     p_status     => 'AVAILABLE',
---     p_experience => 'EXPERT',
---     p_role       => 'MECHANIC' );
-
 -- After a rejected CALL nothing may be written.
 SELECT * FROM TRKEMPLOYEE WHERE ENUM = 17;      -- expect 0 rows
 SELECT * FROM MECHANIC    WHERE LNUM = 40002;   -- expect 0 rows
