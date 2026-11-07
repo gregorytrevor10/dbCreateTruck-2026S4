@@ -69,7 +69,7 @@ CALL add_employee(
     p_lnum       => 40002,
     p_status     => 'AVAILABLE',
     p_experience => NULL,
-    p_role       => 'DRIVER' );
+p_role       => 'DRIVER' );
 
 SELECT * FROM TRKEMPLOYEE WHERE ENUM = 16;
 SELECT * FROM DRIVER      WHERE ENUM = 16;
@@ -85,6 +85,7 @@ CALL add_employee(
     p_status     => 'AVAILABLE',
     p_experience => 'EXPERT',
     p_role       => 'MECHANIC' );
+
 
 SELECT * FROM TRKEMPLOYEE WHERE ENUM = 17;
 SELECT * FROM MECHANIC    WHERE LNUM = 40002;
