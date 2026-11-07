@@ -591,6 +591,251 @@ async function runChecks(name) {
   btn.textContent = 'Run checks';
 }
 
+
+// ----------------------------------------------------------------- cards+dock
+//
+// The fleet is shown as cards. Underneath, one SQL editor stays open: run a
+// statement and the cards re-read themselves, so you see the effect immediately.
+
+const DOCK_STARTER = `-- Change something and watch the cards move.
+-- Try hiring a driver, then look at the Drivers row.
+SELECT e.enum, e.name, d.lnum, d.status, d.totalTripMade
+  FROM driver d
+  JOIN trkemployee e ON e.enum = d.enum
+ ORDER BY d.enum;`;
+
+let dockCm = null;
+
+function dockMarkup() {
+  return `
+    <section class="dock" id="dock">
+      <div class="dock-head">
+        <button id="dock-toggle" class="dock-toggle"><span class="dock-dot"></span>SQL</button>
+        <span class="dock-hint">edit, run, the cards follow</span>
+        <span class="spacer"></span>
+        <span id="dock-status" class="mono"></span>
+        <button id="dock-reset" class="btn quiet tiny">reset</button>
+      </div>
+      <div class="dock-body" id="dock-body">
+        <div class="dock-editor"><textarea id="dock-editor" spellcheck="false"></textarea></div>
+        <div class="dock-side">
+          <button id="dock-run" class="btn primary">Run</button>
+          <div id="dock-out" class="dock-out"><p class="placeholder">Rows and errors appear here.</p></div>
+        </div>
+      </div>
+    </section>`;
+}
+
+function mountDock() {
+  dockCm = null;
+  const box = $('#dock-editor');
+  if (!box) return;
+
+  const saved = localStorage.getItem('trk.dock') || DOCK_STARTER;
+  dockCm = CodeMirror.fromTextArea(box, {
+    mode: 'text/x-pgsql',
+    lineNumbers: true,
+    indentUnit: 2,
+    tabSize: 2,
+    extraKeys: {
+      'Cmd-Enter': () => dockRun(),
+      'Ctrl-Enter': () => dockRun(),
+      Tab: (i) => i.replaceSelection('  '),
+    },
+  });
+  dockCm.setValue(saved);
+  dockCm.on('blur', () => localStorage.setItem('trk.dock', dockCm.getValue()));
+
+  $('#dock-run').onclick = () => dockRun();
+  $('#dock-reset').onclick = () => {
+    dockCm.setValue(DOCK_STARTER);
+    localStorage.setItem('trk.dock', DOCK_STARTER);
+  };
+  $('#dock-toggle').onclick = () => {
+    const body = $('#dock-body');
+    body.classList.toggle('closed');
+    if (!body.classList.contains('closed')) setTimeout(() => dockCm.refresh(), 0);
+  };
+
+  setTimeout(() => dockCm.refresh(), 0);
+}
+
+function dockResult(message, kind = 'meta') {
+  const host = $('#dock-out');
+  if (!host) return;
+  host.innerHTML = '';
+  const line = document.createElement('div');
+  line.className = `line ${kind}`;
+  line.textContent = message;
+  host.appendChild(line);
+}
+
+async function dockRun() {
+  if (!dockCm) return;
+  const sql = dockCm.getValue();
+  if (!sql.trim()) return;
+  localStorage.setItem('trk.dock', sql);
+
+  const btn = $('#dock-run');
+  btn.disabled = true;
+  $('#dock-status').textContent = 'running…';
+
+  try {
+    const out = await q(sql);
+    const host = $('#dock-out');
+    host.innerHTML = '';
+
+    if (!out.ok) {
+      $('#dock-status').textContent = `${out.durationMs} ms · error`;
+      const e = out.error;
+      const line = document.createElement('div');
+      line.className = 'line error';
+      line.textContent = `ERROR: ${e.message}${e.where ? ` (line ${e.where.line}, column ${e.where.column})` : ''}`;
+      host.appendChild(line);
+      return;
+    }
+
+    for (const n of out.notices || []) {
+      const line = document.createElement('div');
+      line.className = 'line notice';
+      line.textContent = n;
+      host.appendChild(line);
+    }
+
+    if (out.columns.length) {
+      const shown = out.rows.slice(0, 8);
+      const head = out.columns.map((c) => `<th>${esc(c)}</th>`).join('');
+      const body = shown
+        .map((row) => `<tr>${out.columns.map((c) => (isNull(row[c]) ? '<td class="null">NULL</td>' : `<td>${esc(row[c])}</td>`)).join('')}</tr>`)
+        .join('');
+      host.insertAdjacentHTML('beforeend', `<table class="grid"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`);
+    } else {
+      const line = document.createElement('div');
+      line.className = 'line meta';
+      line.textContent = `${out.command || 'OK'} · ${out.statements} statement(s)`;
+      host.appendChild(line);
+    }
+
+    $('#dock-status').textContent = `${out.durationMs} ms · ${out.rowCount} rows`;
+    await Promise.all([renderCards(), refreshState()]);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function driverCard(r, longest) {
+  const stale = num(r.counter) !== num(r.trips);
+  return `
+    <article class="card person">
+      <div class="card-top">
+        ${avatar(r.name).replace('class="avatar"', 'class="avatar lg"')}
+        <div class="card-id"><strong>${esc(r.name)}</strong><span class="mono">${esc(r.lnum)}</span></div>
+        ${badge(r.status)}
+      </div>
+      <div class="card-stats">
+        <div><span class="v">${fmtNumber(r.trips)}</span><span class="k">trips</span></div>
+        <div><span class="v ${stale && !isNull(r.counter) ? 'warn' : ''} ${isNull(r.counter) ? 'unset' : ''}">${isNull(r.counter) ? '—' : fmtNumber(r.counter)}</span><span class="k">counter</span></div>
+        <div><span class="v">${longest === null ? '—' : fmtNumber(longest)}</span><span class="k">longest</span></div>
+      </div>
+      <div class="card-foot">${stale ? '<span class="badge warn">counter stale</span>' : '<span class="badge ok">in step</span>'}</div>
+    </article>`;
+}
+
+function truckCard(r) {
+  return `
+    <article class="card truck">
+      <div class="card-top">
+        <strong class="mono rego">${esc(r.regnum)}</strong>
+        ${badge(r.status)}
+      </div>
+      <div class="card-stats">
+        <div><span class="v">${fmtNumber(r.trips)}</span><span class="k">trips</span></div>
+        <div><span class="v">${fmtNumber(r.services)}</span><span class="k">services</span></div>
+        <div><span class="v">${fmtNumber(r.capacity)}</span><span class="k">capacity</span></div>
+      </div>
+      <div class="card-foot">last service ${esc(fmtDate(r.last_service))}</div>
+    </article>`;
+}
+
+function tripCard(r) {
+  return `
+    <article class="card trip">
+      <div class="card-top">
+        <strong>Trip ${esc(r.tnum)}</strong>
+        <span class="muted date">${esc(fmtDate(r.trip_date))}</span>
+      </div>
+      <div class="who">${avatar(r.driver)}${esc(r.driver)}<span class="mono truck-tag">${esc(r.regnum)}</span></div>
+      <div class="card-route">${ribbon(r.route)}</div>
+    </article>`;
+}
+
+async function renderCards() {
+  const host = $('#cards');
+  if (!host) return;
+
+  const [d, t, trips, longest, totals] = await Promise.all([
+    q(`SELECT e.enum, e.name, d.lnum, d.status, d.totalTripMade AS counter,
+              (SELECT count(*) FROM trip x WHERE x.lnum = d.lnum) AS trips
+         FROM driver d JOIN trkemployee e ON e.enum = d.enum
+        ORDER BY e.name`),
+    q(`SELECT t.regnum, t.status, t.capacity,
+              (SELECT count(*) FROM trip x WHERE x.regnum = t.regnum) AS trips,
+              (SELECT count(*) FROM maintenance m WHERE m.regnum = t.regnum) AS services,
+              (SELECT max(m.maintenance_date) FROM maintenance m WHERE m.regnum = t.regnum) AS last_service
+         FROM truck t ORDER BY t.status, t.regnum`),
+    q(`SELECT t.tnum, t.trip_date, e.name AS driver, t.regnum,
+              (SELECT string_agg(l.departure || ' → ' || l.destination, ' → ' ORDER BY l.legnum)
+                 FROM tripleg l WHERE l.tnum = t.tnum) AS route
+         FROM trip t
+         JOIN driver d ON d.lnum = t.lnum
+         JOIN trkemployee e ON e.enum = d.enum
+        ORDER BY t.trip_date DESC, t.tnum DESC LIMIT 6`),
+    q(`SELECT d.lnum, longtrip(d.lnum) AS longest FROM driver d`),
+    q(`SELECT count(*)::int AS n FROM trip`),
+  ]);
+
+  if (!d.ok) {
+    host.innerHTML = errorView(d);
+    return;
+  }
+
+  const longestMap = new Map();
+  if (longest.ok) for (const r of longest.rows) longestMap.set(r.lnum, r.longest);
+
+  const drivers = d.rows || [];
+  const stale = drivers.filter((r) => num(r.counter) !== num(r.trips)).length;
+
+  host.innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><div class="value">${fmtNumber(drivers.length)}</div><div class="label">drivers</div><div class="note">${drivers.filter((r) => r.status === 'AVAILABLE').length} available</div></div>
+      <div class="kpi"><div class="value">${fmtNumber((t.rows || []).length)}</div><div class="label">trucks</div></div>
+      <div class="kpi"><div class="value">${totals.ok ? fmtNumber(totals.rows[0].n) : '—'}</div><div class="label">trips recorded</div><div class="note">six newest below</div></div>
+      <div class="kpi"><div class="value ${stale ? 'warn' : ''}">${stale}</div><div class="label">counters out of step</div><div class="note">${stale ? 'the trigger lab fixes this' : 'every counter agrees with TRIP'}</div></div>
+    </div>
+
+    <h2 class="section">Drivers <span>${drivers.length}</span></h2>
+    <div class="cards">${drivers.map((r) => driverCard(r, longest.ok ? longestMap.get(r.lnum) : null)).join('')}</div>
+
+    <h2 class="section">Trucks <span>${(t.rows || []).length}</span></h2>
+    <div class="cards">${(t.rows || []).map(truckCard).join('')}</div>
+
+    <h2 class="section">Recent trips <span>${(trips.rows || []).length}</span></h2>
+    <div class="cards trips">${(trips.rows || []).map(tripCard).join('')}</div>
+
+    ${peek(`SELECT e.name, d.lnum, d.totalTripMade,
+       (SELECT count(*) FROM trip t WHERE t.lnum = d.lnum) AS trips
+  FROM driver d JOIN trkemployee e ON e.enum = d.enum
+ ORDER BY e.name;`)}`;
+
+  host.querySelectorAll('[data-open-console]').forEach((b) => {
+    b.onclick = () => {
+      const sql = b.closest('.peek').querySelector('pre').textContent;
+      sessionStorage.setItem('trk.pending', sql);
+      show('console');
+    };
+  });
+}
+
 // --------------------------------------------------------------------- views
 
 const VIEWS = {
@@ -599,64 +844,16 @@ const VIEWS = {
     label: 'Fleet',
     icon: 'user',
     async render() {
-      const kpi = await run(`SELECT
-        (SELECT count(*) FROM driver)                            AS drivers,
-        (SELECT count(*) FROM driver WHERE status = 'AVAILABLE') AS drivers_available,
-        (SELECT count(*) FROM truck)                             AS trucks,
-        (SELECT count(*) FROM trip)                              AS trips,
-        (SELECT count(*) FROM maintenance)                       AS service_jobs`);
-      if (!kpi.ok) return errorView(kpi);
-      const k = kpi.rows[0] || {};
-
-      const recent = await run(`SELECT t.tnum, t.trip_date, e.name AS driver, t.regnum,
-       (SELECT string_agg(l.departure || ' → ' || l.destination, ' → ' ORDER BY l.legnum)
-          FROM tripleg l WHERE l.tnum = t.tnum) AS route
-  FROM trip t
-  JOIN driver d ON d.lnum = t.lnum
-  JOIN trkemployee e ON e.enum = d.enum
- ORDER BY t.trip_date DESC, t.tnum DESC LIMIT 5`);
-
-      const counters = await run(`SELECT e.name, d.lnum, d.totalTripMade AS counter,
-       (SELECT count(*) FROM trip t WHERE t.lnum = d.lnum) AS trips
-  FROM driver d JOIN trkemployee e ON e.enum = d.enum
- ORDER BY e.name`);
-
-      const out = counters.rows || [];
-      const stale = out.filter((r) => num(r.counter) !== num(r.trips)).length;
-
       return `
         <div class="view-head">
-          <div><h1>The fleet</h1><p class="sub">Real rows from the seed. The labs below change them.</p></div>
+          <div><h1>The fleet</h1><p class="sub">Real rows from the seed. Write SQL below and watch the cards change.</p></div>
         </div>
-
-        <div class="kpis">
-          <div class="kpi"><div class="value">${fmtNumber(k.drivers)}</div><div class="label">drivers</div><div class="note">${fmtNumber(k.drivers_available)} available</div></div>
-          <div class="kpi"><div class="value">${fmtNumber(k.trucks)}</div><div class="label">trucks</div></div>
-          <div class="kpi"><div class="value">${fmtNumber(k.trips)}</div><div class="label">trips</div></div>
-          <div class="kpi"><div class="value">${fmtNumber(k.service_jobs)}</div><div class="label">service jobs</div></div>
-          <div class="kpi"><div class="value ${stale ? 'warn' : ''}">${stale}</div><div class="label">counters out of step</div><div class="note">${stale ? 'the trigger lab fixes this' : 'stored counter matches TRIP'}</div></div>
-        </div>
-
-        ${panel('Latest trips', 'five most recent', tableHTML([
-          { key: 'tnum', label: 'Trip', cls: 'key mono' },
-          { key: 'trip_date', label: 'Date', format: (v) => esc(fmtDate(v)) },
-          { key: 'driver', label: 'Driver', html: (r) => `<span class="who">${avatar(r.driver)}${esc(r.driver)}</span>` },
-          { key: 'regnum', label: 'Truck', cls: 'mono' },
-          { key: 'route', label: 'Route', html: (r) => ribbon(r.route) },
-        ], recent.rows || []))}
-
-        ${panel('Trip counters', 'stored value against a live count', tableHTML([
-          { key: 'name', label: 'Driver', html: (r) => `<span class="who">${avatar(r.name)}${esc(r.name)}</span>` },
-          { key: 'lnum', label: 'Licence', cls: 'mono' },
-          { key: 'counter', label: 'Stored', align: 'right', format: (v) => (isNull(v) ? '<span class="null">null</span>' : esc(fmtNumber(v))) },
-          { key: 'trips', label: 'Actual', align: 'right', format: (v) => esc(fmtNumber(v)) },
-          { key: 'state', label: '', html: (r) => (num(r.counter) === num(r.trips) ? '<span class="badge ok">in step</span>' : '<span class="badge warn">stale</span>') },
-        ], out))}
-
-        ${peek(`SELECT e.name, d.lnum, d.totalTripMade,
-       (SELECT count(*) FROM trip t WHERE t.lnum = d.lnum) AS trips
-  FROM driver d JOIN trkemployee e ON e.enum = d.enum
- ORDER BY e.name;`)}`;
+        <div id="cards"><p class="placeholder">Loading…</p></div>
+        ${dockMarkup()}`;
+    },
+    mount() {
+      mountDock();
+      renderCards();
     },
   },
 

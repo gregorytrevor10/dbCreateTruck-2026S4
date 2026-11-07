@@ -24,9 +24,13 @@ make down      # stop, keep the data
 
 ## The screens
 
-**Fleet** — the seed as a business: drivers, trucks, trips, and a column showing
-every driver's stored `totalTripMade` next to a live `count(*)`. Before you write
-the trigger, most counters say `stale`. That is the problem the trigger lab solves.
+**Fleet** — the seed as cards: every driver, every truck, the six newest trips.
+A driver card shows trips, the stored `totalTripMade`, and the longest trip. Under
+the cards sits a SQL editor. Run a statement there and the cards re-read
+themselves, so an insert, an update or a new procedure shows up immediately.
+
+Before you write the trigger, most drivers say `counter stale`. That is the problem
+the trigger lab solves.
 
 **Procedures** — write `add_employee(...)`. Five checks: the routine exists, it
 hires a driver, it hires a mechanic, it rejects an unknown role, and it rejects a
