@@ -1,0 +1,14 @@
+{
+  "name": "trk-sandbox",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Revision console for the TRUCK database seed.",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}

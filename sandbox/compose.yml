@@ -1,0 +1,48 @@
+# Sandbox for the TRUCK database.
+#
+# Two services: the database, and the console that talks to it. Nothing else.
+# Run `make up` from this folder. Ports bind to 127.0.0.1 so the console is not
+# reachable from the network: it will execute any SQL it is handed.
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${PGUSER:-trk}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-trk}
+      POSTGRES_DB: ${PGDATABASE:-trk}
+      # Deterministic dates: the seed builds rows from current_date, so both
+      # people comparing results should be in the same zone.
+      TZ: ${TZ:-Australia/Sydney}
+      PGTZ: ${TZ:-Australia/Sydney}
+    ports:
+      - "127.0.0.1:${PGPORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-trk} -d ${PGDATABASE:-trk}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  app:
+    build: ./app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${PGUSER:-trk}:${PGPASSWORD:-trk}@db:5432/${PGDATABASE:-trk}
+      SEED_FILE: /repo/dbCreateTruck-2026S4.sql
+      SUBMISSION_DIR: /repo/submission
+      PORT: 8099
+      TZ: ${TZ:-Australia/Sydney}
+    ports:
+      - "127.0.0.1:${UI_PORT:-8099}:8099"
+    volumes:
+      - ./web:/app/web:ro
+      - ..:/repo:ro
+    restart: unless-stopped
+
+volumes:
+  pgdata:
