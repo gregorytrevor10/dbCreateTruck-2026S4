@@ -719,6 +719,7 @@ function mountDock() {
   dockCm = CodeMirror.fromTextArea(box, {
     mode: 'text/x-pgsql',
     lineNumbers: true,
+    lineWrapping: true,
     indentUnit: 2,
     tabSize: 2,
     extraKeys: {
@@ -787,7 +788,7 @@ async function dockRun() {
     }
 
     host.insertAdjacentHTML('beforeend', changesHTML(out.changes));
-    host.insertAdjacentHTML('beforeend', stepsHTML(out));
+    if ((out.results || []).length > 1) host.insertAdjacentHTML('beforeend', stepsHTML(out));
 
     if (out.columns.length) {
       const shown = out.rows.slice(0, 8);
@@ -900,13 +901,13 @@ async function renderCards() {
       <div class="kpi"><div class="value ${stale ? 'warn' : ''}">${stale}</div><div class="label">counters out of step</div><div class="note">${stale ? 'the trigger lab fixes this' : 'every counter agrees with TRIP'}</div></div>
     </div>
 
-    <h2 class="section">Drivers <span>${drivers.length}</span></h2>
+    <h2 class="section"><span class="num">01</span>Drivers<span>${drivers.length}</span></h2>
     <div class="cards">${drivers.map((r) => driverCard(r, longest.ok ? longestMap.get(r.lnum) : null)).join('')}</div>
 
-    <h2 class="section">Trucks <span>${(t.rows || []).length}</span></h2>
+    <h2 class="section"><span class="num">02</span>Trucks<span>${(t.rows || []).length}</span></h2>
     <div class="cards">${(t.rows || []).map(truckCard).join('')}</div>
 
-    <h2 class="section">Recent trips <span>${(trips.rows || []).length}</span></h2>
+    <h2 class="section"><span class="num">03</span>Recent trips<span>${(trips.rows || []).length}</span></h2>
     <div class="cards trips">${(trips.rows || []).map(tripCard).join('')}</div>
 
     ${peek(`SELECT e.name, d.lnum, d.totalTripMade,
@@ -933,10 +934,12 @@ const VIEWS = {
     async render() {
       return `
         <div class="view-head">
-          <div><h1>The fleet</h1><p class="sub">Real rows from the seed. Write SQL below and watch the cards change.</p></div>
+          <div><h1>The fleet</h1><p class="sub">Real rows from the seed. Write SQL on the right and watch the cards change.</p></div>
         </div>
-        <div id="cards"><p class="placeholder">Loading…</p></div>
-        ${dockMarkup()}`;
+        <div class="fleet-grid">
+          <div id="cards"><p class="placeholder">Loading…</p></div>
+          ${dockMarkup()}
+        </div>`;
     },
     mount() {
       mountDock();
