@@ -798,3 +798,59 @@ h2.section span { color: var(--faint); font-weight: 400; letter-spacing: 0; }
 }
 
 .card-stats .v.unset { color: var(--faint); font-weight: 500; }
+
+/* ---------------------------------------------------------- what changed */
+
+.changes { display: flex; flex-direction: column; }
+
+.change {
+  display: grid;
+  grid-template-columns: 62px 150px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+.change:last-child { border-bottom: 0; }
+
+.change-tag {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  justify-self: start;
+  background: var(--line-soft);
+  color: var(--muted);
+}
+
+.change.added .change-tag { background: var(--green-soft); color: var(--green); }
+.change.removed .change-tag { background: var(--red-soft); color: var(--red); }
+.change.updated .change-tag { background: var(--amber-soft); color: var(--amber); }
+.change.created .change-tag,
+.change.replaced .change-tag { background: var(--accent-soft); color: var(--accent); }
+.change.dropped .change-tag { background: var(--red-soft); color: var(--red); }
+
+.change-table { font-family: var(--mono); font-size: 11px; color: var(--ink); }
+.change-detail { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* ---------------------------------------------------------------- steps */
+
+.steps { margin-top: 8px; border-top: 1px solid var(--line-soft); padding-top: 6px; }
+
+.step {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 0;
+  font-size: 11px;
+}
+.step-n { color: var(--faint); font-size: 10px; }
+.step-text { font-family: var(--mono); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step-ok { color: var(--green); font-family: var(--mono); font-size: 10.5px; }
+.step-bad { color: var(--red); font-family: var(--mono); font-size: 10.5px; }
+
+.dock-out .changes .change { grid-template-columns: 56px 110px minmax(0, 1fr); padding: 4px 0; border-bottom: 0; }

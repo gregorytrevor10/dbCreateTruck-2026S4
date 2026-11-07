@@ -540,7 +540,16 @@ async function runWorksheet(name) {
       return;
     }
 
+    const changes = $('#lab-changes');
+    if (changes) changes.innerHTML = changesHTML(payload.changes);
+
     for (const n of payload.notices || []) labOutput('notice', n);
+
+    if (payload.results && payload.results.length > 1) {
+      const steps = document.createElement('div');
+      steps.innerHTML = stepsHTML(payload);
+      $('#lab-output').appendChild(steps);
+    }
 
     if (!payload.columns.length) {
       host.innerHTML = `<p class="placeholder">${esc(payload.command || 'OK')} · ${payload.statements} statement(s), no rows.</p>`;
@@ -591,6 +600,81 @@ async function runChecks(name) {
   btn.textContent = 'Run checks';
 }
 
+
+// ------------------------------------------------------------- what changed
+//
+// Postgres will not tell you what a trigger did. It will tell you what the tables
+// look like afterwards. So each run is bracketed by a snapshot and the difference
+// is shown: rows added, removed, changed field by field, routines and triggers
+// created or replaced.
+
+function shortValue(v) {
+  if (isNull(v)) return '∅';
+  const text = String(v);
+  return text.length > 24 ? `${text.slice(0, 24)}…` : text;
+}
+
+function rowSummary(row, key) {
+  return Object.entries(row)
+    .filter(([k]) => !key.includes(k))
+    .slice(0, 4)
+    .map(([k, v]) => (k === 'name' || k === 'regnum' ? shortValue(v) : `${k} ${shortValue(v)}`))
+    .join(' · ');
+}
+
+function changeRows(changes) {
+  const out = [];
+  for (const t of changes.tables || []) {
+    for (const row of t.added) out.push({ kind: 'added', tag: '+1 row', table: t.name, detail: rowSummary(row, t.key) });
+    for (const row of t.removed) out.push({ kind: 'removed', tag: '−1 row', table: t.name, detail: rowSummary(row, t.key) });
+    for (const u of t.updated) {
+      const keyLabel = t.key.length === 1 ? `${t.key[0]} ${u.key}` : u.key;
+      out.push({
+        kind: 'updated',
+        tag: '~1 row',
+        table: t.name,
+        detail: `${keyLabel} · ${u.fields.map((f) => `${f.field} ${shortValue(f.before)} → ${shortValue(f.after)}`).join(', ')}`,
+      });
+    }
+  }
+  for (const r of changes.routines || []) {
+    out.push({ kind: r.action, tag: r.action, table: r.kind === 'p' ? 'procedure' : 'function', detail: r.name });
+  }
+  for (const t of changes.triggers || []) {
+    out.push({ kind: t.action, tag: t.action, table: 'trigger', detail: `${t.name} on ${t.table}` });
+  }
+  return out;
+}
+
+function changesHTML(changes) {
+  if (!changes) return '<p class="placeholder">No trace for this run.</p>';
+  const rows = changeRows(changes);
+  if (!rows.length) {
+    return '<p class="placeholder">Nothing changed. The statement only read.</p>';
+  }
+  return `<div class="changes">${rows
+    .map(
+      (r) => `<div class="change ${r.kind}">
+        <span class="change-tag">${esc(r.tag)}</span>
+        <span class="change-table">${esc(r.table)}</span>
+        <span class="change-detail">${esc(r.detail)}</span>
+      </div>`,
+    )
+    .join('')}</div>`;
+}
+
+function stepsHTML(payload) {
+  const list = (payload.results || []).filter((r) => r.command !== null || r.error);
+  if (!list.length) return '';
+  return `<div class="steps">${list
+    .map((r, i) => {
+      const status = r.error
+        ? `<span class="step-bad">${esc(r.error.message)}</span>`
+        : `<span class="step-ok">${esc(r.command)}${r.rowCount ? ` · ${r.rowCount} row${r.rowCount === 1 ? '' : 's'}` : ''}</span>`;
+      return `<div class="step"><span class="step-n">${i + 1}</span><span class="step-text">${esc(r.text || '')}</span>${status}</div>`;
+    })
+    .join('')}</div>`;
+}
 
 // ----------------------------------------------------------------- cards+dock
 //
@@ -701,6 +785,9 @@ async function dockRun() {
       line.textContent = n;
       host.appendChild(line);
     }
+
+    host.insertAdjacentHTML('beforeend', changesHTML(out.changes));
+    host.insertAdjacentHTML('beforeend', stepsHTML(out));
 
     if (out.columns.length) {
       const shown = out.rows.slice(0, 8);
@@ -933,6 +1020,11 @@ function labView(name) {
             <button id="load-starter" class="btn quiet">Reset to starter</button>
           </div>
         </section>
+
+        <div class="panel changes-panel">
+          <div class="panel-head"><span class="panel-title">What changed</span><span class="panel-note">rows and objects, before and after your run</span></div>
+          <div id="lab-changes"><p class="placeholder">Run the worksheet to see its effect.</p></div>
+        </div>
 
         <div class="panel checks">
           <div class="panel-head"><span class="panel-title">Checks</span><span class="panel-note">each runs in a transaction, then rolls back</span></div>

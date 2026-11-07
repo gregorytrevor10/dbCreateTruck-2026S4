@@ -198,7 +198,7 @@ async function runScript(client, sql) {
           command: r.command || null,
           columns: (r.fields || []).map((f) => f.name),
           rows: r.rows || [],
-          rowCount: (r.rows || []).length,
+          rowCount: typeof r.rowCount === 'number' ? r.rowCount : (r.rows || []).length,
           error: null,
         });
       } catch (err) {
@@ -237,6 +237,123 @@ async function runScript(client, sql) {
     notices,
     durationMs: Math.round(durationMs * 10) / 10,
   };
+}
+
+// ---------------------------------------------------------------- snapshots
+//
+// A run is bracketed by two snapshots of the schema. The difference is what the
+// console shows: which rows appeared, which changed field by field, and which
+// routines or triggers were created or replaced.
+
+async function snapshot(client) {
+  const out = { tables: {}, routines: {}, triggers: {} };
+
+  const tables = await client.query(
+    `SELECT c.relname AS name
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind = 'r'
+      ORDER BY 1`,
+  );
+
+  for (const { name } of tables.rows) {
+    const pk = await client.query(
+      `SELECT a.attname
+         FROM pg_index i
+         JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+        WHERE i.indrelid = $1::regclass AND i.indisprimary`,
+      [name],
+    );
+    const rows = await client.query(`SELECT * FROM "${name}"`);
+    out.tables[name] = { key: pk.rows.map((r) => r.attname), rows: rows.rows };
+  }
+
+  const routines = await client.query(
+    `SELECT p.proname AS name, p.prokind AS kind,
+            pg_get_function_identity_arguments(p.oid) AS args,
+            md5(pg_get_functiondef(p.oid)) AS body
+       FROM pg_proc p
+       JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.prokind IN ('f', 'p')`,
+  );
+  for (const row of routines.rows) out.routines[`${row.name}(${row.args})`] = row;
+
+  const triggers = await client.query(
+    `SELECT t.tgname AS name, c.relname AS tbl, pg_get_triggerdef(t.oid) AS def
+       FROM pg_trigger t
+       JOIN pg_class c ON c.oid = t.tgrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE NOT t.tgisinternal AND n.nspname = 'public'`,
+  );
+  for (const row of triggers.rows) out.triggers[row.name] = row;
+
+  return out;
+}
+
+function rowKey(entry, row) {
+  if (entry.key.length) return entry.key.map((k) => String(row[k])).join('|');
+  return JSON.stringify(row);
+}
+
+function diffSnapshots(before, after) {
+  const tables = [];
+
+  for (const name of Object.keys(after.tables)) {
+    const b = before.tables[name] || { key: [], rows: [] };
+    const a = after.tables[name];
+    const bMap = new Map(b.rows.map((r) => [rowKey(b, r), r]));
+    const aMap = new Map(a.rows.map((r) => [rowKey(a, r), r]));
+
+    const added = [];
+    const removed = [];
+    const updated = [];
+
+    for (const [k, row] of aMap) if (!bMap.has(k)) added.push(row);
+    for (const [k, row] of bMap) if (!aMap.has(k)) removed.push(row);
+    for (const [k, row] of aMap) {
+      const prev = bMap.get(k);
+      if (!prev) continue;
+      const fields = Object.keys(row)
+        .filter((f) => JSON.stringify(prev[f]) !== JSON.stringify(row[f]))
+        .map((f) => ({ field: f, before: prev[f], after: row[f] }));
+      if (fields.length) updated.push({ key: k, fields });
+    }
+
+    if (added.length || removed.length || updated.length) {
+      tables.push({ name, key: a.key, added, removed, updated });
+    }
+  }
+
+  const routines = [];
+  for (const [name, r] of Object.entries(after.routines)) {
+    const prev = before.routines[name];
+    if (!prev) routines.push({ name, kind: r.kind, action: 'created' });
+    else if (prev.body !== r.body) routines.push({ name, kind: r.kind, action: 'replaced' });
+  }
+  for (const name of Object.keys(before.routines)) {
+    if (!after.routines[name]) routines.push({ name, kind: before.routines[name].kind, action: 'dropped' });
+  }
+
+  const triggers = [];
+  for (const [name, t] of Object.entries(after.triggers)) {
+    const prev = before.triggers[name];
+    if (!prev) triggers.push({ name, table: t.tbl, action: 'created' });
+    else if (prev.def !== t.def) triggers.push({ name, table: t.tbl, action: 'replaced' });
+  }
+  for (const name of Object.keys(before.triggers)) {
+    if (!after.triggers[name]) triggers.push({ name, table: before.triggers[name].tbl, action: 'dropped' });
+  }
+
+  return { tables, routines, triggers };
+}
+
+// Run a script and report what changed around it.
+async function tracedRun(client, sql) {
+  const before = await snapshot(client);
+  const result = await runScript(client, sql);
+  const after = await snapshot(client);
+  result.changes = diffSnapshots(before, after);
+  return result;
 }
 
 // ------------------------------------------------------------ database state
@@ -417,7 +534,7 @@ const server = createServer(async (req, res) => {
       }
       const client = await pool.connect();
       try {
-        return json(res, 200, await runScript(client, sql));
+        return json(res, 200, await tracedRun(client, sql));
       } finally {
         client.release();
       }
@@ -436,7 +553,7 @@ const server = createServer(async (req, res) => {
       const raw = await readFile(join(SUBMISSION_DIR, relative), 'utf8');
       const client = await pool.connect();
       try {
-        return json(res, 200, await runScript(client, withoutMetaCommands(raw)));
+        return json(res, 200, await tracedRun(client, withoutMetaCommands(raw)));
       } finally {
         client.release();
       }
