@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 
-COPY server.mjs ./
+COPY server.mjs audit.mjs sqltext.mjs ./
 
 EXPOSE 8099
 CMD ["node", "server.mjs"]

@@ -11,6 +11,10 @@
 //   POST /api/reseed       drop schema public and replay the seed file
 //   POST /api/apply        { task } -> run submission/taskN/solutionN.sql
 //   GET  /api/routine?name=play the stored definition of a routine or trigger function
+//   POST /api/world/reset  { session }             build the session's clone
+//   POST /api/world/state  { session }             read it
+//   POST /api/world/advance { session, n }         run n ticks, return what changed
+//   POST /api/world/apply  { session, script }     change the SQL the clone runs on
 //
 // Every route is read-write. The container binds to 127.0.0.1 only, on purpose:
 // this tool runs anything it is given.
@@ -19,6 +23,8 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { join, extname, resolve, sep } from 'node:path';
 import pg from 'pg';
+import { withoutSeedDrops, withoutMetaCommands, describeError, runScript } from './sqltext.mjs';
+import { worldReset, worldState, worldAdvance, worldApply } from './audit.mjs';
 
 const { Pool } = pg;
 
@@ -49,195 +55,10 @@ const pool = new Pool({
 });
 
 // ---------------------------------------------------------------- SQL helpers
+//
+// Splitting, stripping and running scripts lives in sqltext.mjs, because the
+// console and the audit engine must treat a script the same way.
 
-// The seed opens with seven `drop table ... cascade;` lines. They only exist so
-// the file can be replayed over a dirty database. Reseeding drops the whole
-// schema first, so those lines would fail on an empty database and abort the
-// load. Strip them at run time and leave Greg's file untouched on disk.
-function withoutSeedDrops(text) {
-  return text
-    .split('\n')
-    .filter((line) => !/^\s*drop\s+table\b/i.test(line))
-    .join('\n');
-}
-
-// psql meta-commands (\set ECHO all, \i, \d) are client syntax, not SQL. The
-// database would answer them with a syntax error, so remove the lines.
-function withoutMetaCommands(text) {
-  return text
-    .split('\n')
-    .filter((line) => !/^\s*\\/.test(line))
-    .join('\n');
-}
-
-// Turn a character offset into something a human can find in the editor.
-function locate(sql, position) {
-  if (!position) return null;
-  const before = sql.slice(0, Math.max(0, position - 1));
-  const lines = before.split('\n');
-  return { line: lines.length, column: lines[lines.length - 1].length + 1 };
-}
-
-function describeError(err, sql) {
-  return {
-    message: err.message,
-    code: err.code || null,
-    detail: err.detail || null,
-    hint: err.hint || null,
-    position: err.position ? Number(err.position) : null,
-    where: locate(sql, err.position ? Number(err.position) : null),
-  };
-}
-
-// Split a script into statements the way psql does: one at a time, so a failure
-// in the middle does not roll back the statements before it. Dollar quoting,
-// strings, identifiers and comments are respected.
-function splitSql(input) {
-  const out = [];
-  let buf = '';
-  let i = 0;
-  const n = input.length;
-  let tag = null;
-
-  while (i < n) {
-    if (tag) {
-      if (input.startsWith(tag, i)) {
-        buf += tag;
-        i += tag.length;
-        tag = null;
-        continue;
-      }
-      buf += input[i++];
-      continue;
-    }
-
-    const ch = input[i];
-
-    if (ch === "'" || ch === '"') {
-      const quote = ch;
-      buf += ch;
-      i++;
-      while (i < n) {
-        if (input[i] === quote) {
-          if (input[i + 1] === quote) {
-            buf += quote + quote;
-            i += 2;
-            continue;
-          }
-          buf += quote;
-          i++;
-          break;
-        }
-        buf += input[i++];
-      }
-      continue;
-    }
-
-    if (ch === '-' && input[i + 1] === '-') {
-      while (i < n && input[i] !== '\n') buf += input[i++];
-      continue;
-    }
-
-    if (ch === '/' && input[i + 1] === '*') {
-      buf += '/*';
-      i += 2;
-      while (i < n && !(input[i] === '*' && input[i + 1] === '/')) buf += input[i++];
-      if (i < n) {
-        buf += '*/';
-        i += 2;
-      }
-      continue;
-    }
-
-    if (ch === '$') {
-      const m = /^\$[A-Za-z_0-9]*\$/.exec(input.slice(i));
-      if (m) {
-        tag = m[0];
-        buf += tag;
-        i += tag.length;
-        continue;
-      }
-    }
-
-    if (ch === ';') {
-      out.push(buf.trim());
-      buf = '';
-      i++;
-      continue;
-    }
-
-    buf += input[i++];
-  }
-
-  if (buf.trim()) out.push(buf.trim());
-  return out.filter((s) => s.length > 0);
-}
-
-// Run a script statement by statement on one connection, collecting each result.
-async function runScript(client, sql) {
-  const notices = [];
-  const onNotice = (n) => notices.push(`${n.severity.toLowerCase()}: ${n.message}`);
-  client.on('notice', onNotice);
-
-  const started = process.hrtime.bigint();
-  const statements = splitSql(sql);
-  const results = [];
-  let firstError = null;
-  let open = false;
-
-  try {
-    for (const stmt of statements) {
-      const bare = stmt.replace(/--[^\n]*/g, '').trim().toLowerCase();
-      if (/^(begin|start\s+transaction)\b/.test(bare)) open = true;
-      if (/^(commit|rollback|end)\b/.test(bare)) open = false;
-
-      try {
-        const r = await client.query(stmt);
-        results.push({
-          text: stmt.length > 90 ? `${stmt.slice(0, 90)}…` : stmt,
-          command: r.command || null,
-          columns: (r.fields || []).map((f) => f.name),
-          rows: r.rows || [],
-          rowCount: typeof r.rowCount === 'number' ? r.rowCount : (r.rows || []).length,
-          error: null,
-        });
-      } catch (err) {
-        const described = describeError(err, stmt);
-        results.push({
-          text: stmt.length > 90 ? `${stmt.slice(0, 90)}…` : stmt,
-          command: null,
-          columns: [],
-          rows: [],
-          rowCount: 0,
-          error: described,
-        });
-        if (!firstError) firstError = described;
-        // Inside a transaction every later statement will be rejected anyway.
-        if (open) break;
-      }
-    }
-  } finally {
-    if (open) await client.query('ROLLBACK').catch(() => {});
-    client.off('notice', onNotice);
-  }
-
-  const durationMs = Number(process.hrtime.bigint() - started) / 1e6;
-  const withRows = results.filter((r) => r.columns.length);
-  const last = withRows[withRows.length - 1];
-
-  return {
-    ok: !firstError,
-    statements: results.length,
-    command: last ? last.command : results[results.length - 1]?.command || null,
-    columns: last ? last.columns : [],
-    rows: last ? last.rows : [],
-    rowCount: last ? last.rowCount : 0,
-    results,
-    error: firstError,
-    notices,
-    durationMs: Math.round(durationMs * 10) / 10,
-  };
-}
 
 // ---------------------------------------------------------------- snapshots
 //
@@ -436,6 +257,17 @@ async function state() {
 
 // ------------------------------------------------------------------- reseed
 
+// The seed, parsed once. Every clone and every audit replays this exact text,
+// so two runs on the same day start from identical rows.
+let SEED_TEXT = null;
+async function seedText() {
+  if (!SEED_TEXT) {
+    const raw = await readFile(SEED_FILE, 'utf8');
+    SEED_TEXT = withoutSeedDrops(withoutMetaCommands(raw));
+  }
+  return SEED_TEXT;
+}
+
 async function reseed() {
   const client = await pool.connect();
   const started = process.hrtime.bigint();
@@ -557,6 +389,28 @@ const server = createServer(async (req, res) => {
       } finally {
         client.release();
       }
+    }
+
+    // The world: one live clone per browser session. Reset builds it, advance
+    // walks it, apply changes the SQL it runs on.
+    if (req.method === 'POST' && path === '/api/world/reset') {
+      const body = await readBody(req);
+      return json(res, 200, await worldReset(pool, await seedText(), body));
+    }
+
+    if (req.method === 'POST' && path === '/api/world/state') {
+      const body = await readBody(req);
+      return json(res, 200, await worldState(pool, body));
+    }
+
+    if (req.method === 'POST' && path === '/api/world/advance') {
+      const body = await readBody(req);
+      return json(res, 200, await worldAdvance(pool, await seedText(), body));
+    }
+
+    if (req.method === 'POST' && path === '/api/world/apply') {
+      const body = await readBody(req);
+      return json(res, 200, await worldApply(pool, body));
     }
 
     if (req.method === 'GET' && path === '/api/routine') {

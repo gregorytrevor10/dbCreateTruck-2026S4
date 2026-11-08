@@ -1,7 +1,7 @@
 # TRUCK practice playground
 
 Three labs over the TRUCK database: stored procedures, row-level triggers, stored
-functions. Postgres runs in a container, a small page serves the labs, and the
+functions. Postgres runs in a container and a page serves one live depot. The
 seed file is the fixture.
 
 Nothing here is a deliverable. The assignment output still comes from `psql`.
@@ -22,33 +22,42 @@ make psql      # the real psql, inside the container
 make down      # stop, keep the data
 ```
 
-## The screens
+## The screen
 
-**Fleet** — the seed as cards: every driver, every truck, the six newest trips.
-A driver card shows trips, the stored `totalTripMade`, and the longest trip. Under
-the cards sits a SQL editor. Run a statement there and the cards re-read
-themselves, so an insert, an update or a new procedure shows up immediately.
+One page: **the world**. Nothing on it is drawn by hand.
 
-Before you write the trigger, most drivers say `counter stale`. That is the problem
-the trigger lab solves.
+- **Cities** are the ends of the routes in `TRIPLEG`, placed on a ring by angle.
+- **Routes** are the route rows; a line is as thick as the trips on it.
+- **Trucks** are `TRIP` rows, sitting somewhere along their own route.
+- **Drivers** stand where their latest trip ended. **Mechanics** stand at the
+  depot. Both are rows.
+- **The panel on the right** is `DRIVER`: trips on file next to the stored
+  counter, and the difference. `totalTripMade` is supposed to equal the number
+  of trips; when it does not, that row is the bug.
 
-**Procedures** — write `add_employee(...)`. Five checks: the routine exists, it
-hires a driver, it hires a mechanic, it rejects an unknown role, and it rejects a
-licence that already belongs to the other kind.
+Scroll to zoom, drag to pan, `fit` to reset.
 
-**Triggers** — write the row-level trigger that keeps `DRIVER.totalTripMade`
-correct. Four checks: the trigger exists, the counter follows an insert, it
-follows a delete, and the rows that were already there agree with `TRIP`.
+### The clock
 
-**Functions** — write `longtrip(lnum)`. Three checks: the function exists, it
-returns the right number for a driver with trips, and it returns 0 for a driver
-with none.
+The depot lives at the speed you pick: pause, ¼×, ½×, 1×, 4×, 16×, 64×.
+Each tick is one statement against a clone of the seed — an arrival, a
+cancellation, a trip moving between drivers — and the panel is read after each
+one. A new world is always born paused.
 
-**Console** — free SQL, plus the three solution files if you want to see what
-yours does.
+Watch it at 64× with no trigger: the counters stop matching within a minute.
+That is the lesson, and it is visible without reading a word.
 
-Every lab keeps your worksheet in the browser, so switching screens does not lose
-work. `⌘/Ctrl + Enter` runs the file.
+### Changing the physics
+
+The strip at the bottom is the only input. Three buttons load the shape of the
+three objects; fill in the body and press **Apply to the world**. The running
+clone takes your SQL immediately, so the same world that was rotting stops
+rotting. The last few hundred ticks are in the ticker.
+
+### The older screens
+
+`Fleet` and the three labs still exist behind the `Console` link and the URL,
+with the original static checks. They are not the front door any more.
 
 ## How checks work
 

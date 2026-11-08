@@ -567,15 +567,10 @@ async function runWorksheet(name) {
   }
 }
 
-async function runChecks(name) {
+// Run a lab's checks and return the verdicts. The mission view calls this too,
+// so the rubric cannot drift between the two screens.
+async function runLabChecks(name, onEach) {
   const lab = LABS[name];
-  const host = $('#check-results');
-  const btn = $('#run-checks');
-  btn.disabled = true;
-  btn.textContent = 'Running…';
-  $('#status-left').textContent = 'checking…';
-  host.innerHTML = lab.checks.map((c) => `<div class="check pending"><span class="mark">•</span><span class="label">${esc(c.label)}</span><span class="detail">waiting</span></div>`).join('');
-
   const out = [];
   for (const check of lab.checks) {
     let verdict;
@@ -587,11 +582,26 @@ async function runChecks(name) {
       verdict = { pass: false, detail: String(err.message || err) };
     }
     out.push({ label: check.label, ...verdict });
-    host.innerHTML = out
+    if (onEach) onEach(out);
+  }
+  return out;
+}
+
+async function runChecks(name) {
+  const lab = LABS[name];
+  const host = $('#check-results');
+  const btn = $('#run-checks');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  $('#status-left').textContent = 'checking…';
+  host.innerHTML = lab.checks.map((c) => `<div class="check pending"><span class="mark">•</span><span class="label">${esc(c.label)}</span><span class="detail">waiting</span></div>`).join('');
+
+  const out = await runLabChecks(name, (partial) => {
+    host.innerHTML = partial
       .map((r) => `<div class="check ${r.pass ? 'pass' : 'fail'}"><span class="mark">${r.pass ? '✓' : '✕'}</span><span class="label">${esc(r.label)}</span><span class="detail">${esc(r.detail)}</span></div>`)
       .join('');
     $('#status-left').textContent = 'checking…';
-  }
+  });
 
   const passed = out.filter((r) => r.pass).length;
   $('#status-left').textContent = `${passed}/${out.length} checks pass`;
@@ -927,10 +937,13 @@ async function renderCards() {
 // --------------------------------------------------------------------- views
 
 const VIEWS = {
+  // Registered by game.js, which loads first: Missions, Bench, Engine.
+  ...(window.TRK_VIEWS || {}),
 
   fleet: {
     label: 'Fleet',
     icon: 'user',
+    hidden: true,
     async render() {
       return `
         <div class="view-head">
@@ -947,9 +960,9 @@ const VIEWS = {
     },
   },
 
-  procedures: { label: 'Procedures', icon: 'wrench', lab: 'procedures' },
-  triggers: { label: 'Triggers', icon: 'route', lab: 'triggers' },
-  functions: { label: 'Functions', icon: 'grid', lab: 'functions' },
+  procedures: { label: 'Procedures', icon: 'wrench', lab: 'procedures', hidden: true },
+  triggers: { label: 'Triggers', icon: 'route', lab: 'triggers', hidden: true },
+  functions: { label: 'Functions', icon: 'grid', lab: 'functions', hidden: true },
 
   console: {
     label: 'Console',
@@ -1237,12 +1250,23 @@ function icon(name) {
 let current = 'fleet';
 
 async function show(name) {
+  const leaving = VIEWS[current];
+  if (leaving && leaving.unmount && current !== name) {
+    try {
+      leaving.unmount();
+    } catch (err) {
+      console.warn('unmount failed', err);
+    }
+  }
   current = name;
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
 
   const view = VIEWS[name];
   const host = $('#view');
-  host.className = 'view' + (name === 'console' ? ' console-mode' : name === 'fleet' ? '' : ' lab-mode');
+  // The world owns the whole frame: no topbar, no rail, no status bar.
+  document.querySelector('.app').classList.toggle('world-shell', name === 'world');
+  host.className =
+    'view' + (name === 'console' ? ' console-mode' : name === 'world' ? ' world-mode' : name === 'fleet' ? '' : ' lab-mode');
   host.innerHTML = '<p class="placeholder">Loading…</p>';
 
   try {
@@ -1272,6 +1296,7 @@ async function show(name) {
 
 function renderNav() {
   $('#nav').innerHTML = Object.entries(VIEWS)
+    .filter(([, v]) => !v.hidden)
     .map(([key, v]) => `<button data-view="${key}">${icon(v.icon)}<span>${esc(v.label)}</span></button>`)
     .join('');
   document.querySelectorAll('#nav button').forEach((b) => {
@@ -1327,6 +1352,14 @@ async function reseed() {
   }
 }
 
+// ---------------------------------------------------------------- game layer
+//
+// game.js loads before this file and registers three views on window.TRK_VIEWS.
+// It needs the helpers below, so they are handed over here rather than
+// reimplemented on the other side.
+
+window.TRK = { esc, api, q, toast, show, refreshState, labs: LABS, runLabChecks };
+
 // ---------------------------------------------------------------------- start
 
 async function start() {
@@ -1350,7 +1383,7 @@ async function start() {
     </div>`;
     return;
   }
-  show('fleet');
+  show('world');
 }
 
 start();
