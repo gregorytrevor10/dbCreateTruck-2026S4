@@ -68,12 +68,24 @@ answer about trips. Open a step when stuck and it says what the rule is and
 where to look. You can skip any of them and write something else entirely; the
 steps only measure the outcome.
 
-### Changing the physics
+### The workbench
 
-The strip at the bottom is the only input. Three buttons load the shape of the
-three objects; fill in the body and press **Apply to the world**. The running
-clone takes your SQL immediately, so the same world that was rotting stops
-rotting. The last few hundred ticks are in the ticker.
+The strip at the bottom is a plain SQL file, not a form. Write anything:
+`CREATE OR REPLACE`, a bare `SELECT`, a `CALL`, a `DROP`. Four buttons insert a
+commented shape at the cursor — procedure, trigger, function, try it — and you
+can ignore them entirely and type your own.
+
+**Run in the world** applies the file to the running clone, statement by
+statement, exactly as `psql` would. The result tab prints rows, notices, and
+errors with the line and column Postgres reported. The objects tab lists every
+routine and trigger you have written, read back from the catalog: load one to
+see what `CREATE OR REPLACE` actually stored (the clone's schema name is
+stripped so it can be run again in a new world). The syntax tab has the three
+forms with the parts that matter.
+
+The world calls three names: `add_employee(...)`, a trigger on `trip`, and
+`longtrip(lnum)`. Everything else you build is yours; the five steps grade
+outcomes, never the text you typed.
 
 ### The older screens
 

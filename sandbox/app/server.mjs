@@ -15,6 +15,7 @@
 //   POST /api/world/state  { session }             read it
 //   POST /api/world/advance { session, n }         run n ticks, return what changed
 //   POST /api/world/apply  { session, script }     change the SQL the clone runs on
+//   POST /api/world/objects{ session }             the routines and triggers the learner wrote
 //
 // Every route is read-write. The container binds to 127.0.0.1 only, on purpose:
 // this tool runs anything it is given.
@@ -24,7 +25,7 @@ import { readFile } from 'node:fs/promises';
 import { join, extname, resolve, sep } from 'node:path';
 import pg from 'pg';
 import { withoutSeedDrops, withoutMetaCommands, describeError, runScript } from './sqltext.mjs';
-import { worldReset, worldState, worldAdvance, worldApply } from './audit.mjs';
+import { worldReset, worldState, worldAdvance, worldApply, worldLibrary } from './audit.mjs';
 
 const { Pool } = pg;
 
@@ -238,11 +239,11 @@ async function state() {
         triggers: [],
       };
     }
-    const [tables, procs, trigs] = await Promise.all([
-      tableCounts(client),
-      routines(client),
-      triggers(client),
-    ]);
+    // One at a time: a pooled client runs one query at a time, and pg deprecates
+    // racing them through Promise.all.
+    const tables = await tableCounts(client);
+    const procs = await routines(client);
+    const trigs = await triggers(client);
     return {
       connected: true,
       serverVersion: version.rows[0].server_version,
@@ -423,6 +424,13 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST' && path === '/api/world/apply') {
       const body = await readBody(req);
       return json(res, 200, await worldApply(pool, body));
+    }
+
+    // The objects the learner has written, read back from their clone. The
+    // workbench lists them and can load a definition into the editor.
+    if (req.method === 'POST' && path === '/api/world/objects') {
+      const body = await readBody(req);
+      return json(res, 200, await worldLibrary(pool, body));
     }
 
     if (req.method === 'GET' && path === '/api/routine') {

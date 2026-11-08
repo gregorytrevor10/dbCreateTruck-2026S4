@@ -327,6 +327,46 @@ async function seedSchema(client, schema, seedText) {
   }
 }
 
+// A trigger on trip can still be a no-op. Probe the behaviour, not the name:
+// sync the counters, insert one trip inside a transaction, read the counter
+// back, roll everything back. This is what makes the "keep the counter" step
+// mean something.
+async function counterFollowsInsert(client, schema) {
+  const s = `"${schema}"`;
+  await client.query('BEGIN');
+  try {
+    const driver = await client.query(`SELECT lnum FROM ${s}.driver ORDER BY lnum LIMIT 1`);
+    const truck = await client.query(`SELECT regnum FROM ${s}.truck ORDER BY regnum LIMIT 1`);
+    if (!driver.rows.length || !truck.rows.length) return false;
+    const lnum = driver.rows[0].lnum;
+    const regnum = truck.rows[0].regnum;
+    const tnum = Number(
+      (await client.query(`SELECT coalesce(max(tnum), 0) + 1 AS n FROM ${s}.trip`)).rows[0].n,
+    );
+    // The backfill is a different step: give the trigger a clean starting row.
+    await client.query(
+      `UPDATE ${s}.driver d
+          SET totalTripMade = (SELECT count(*) FROM ${s}.trip t WHERE t.lnum = d.lnum)`,
+    );
+    await client.query(
+      `INSERT INTO ${s}.trip (tnum, lnum, regnum, trip_date) VALUES ($1, $2, $3, CURRENT_DATE)`,
+      [tnum, lnum, regnum],
+    );
+    const after = await client.query(
+      `SELECT d.totalTripMade AS counter,
+              (SELECT count(*)::int FROM ${s}.trip t WHERE t.lnum = d.lnum) AS trips
+         FROM ${s}.driver d WHERE d.lnum = $1`,
+      [lnum],
+    );
+    const row = after.rows[0];
+    return row && Number(row.counter) === Number(row.trips);
+  } catch {
+    return false;
+  } finally {
+    await client.query('ROLLBACK').catch(() => {});
+  }
+}
+
 // that exists is the object you were asked for.
 export async function objects(client, schema) {
   const { rows } = await client.query(
@@ -353,12 +393,13 @@ export async function objects(client, schema) {
       ORDER BY t.tgname`,
     [schema],
   );
+  const onTrip = trig.rows.some((t) => t.table_name === 'trip');
   return {
     routines: rows,
     triggers: trig.rows,
     hasProcedure: rows.some((r) => r.kind === 'p' && r.name === 'add_employee'),
     hasFunction: rows.some((r) => r.kind === 'f' && r.name === 'longtrip'),
-    hasTrigger: trig.rows.length > 0 && trig.rows.some((t) => t.table_name === 'trip'),
+    hasTrigger: onTrip ? await counterFollowsInsert(client, schema) : false,
   };
 }
 
@@ -421,7 +462,13 @@ async function assertEvent(client, ev) {
   return null;
 }
 
-async function play(client, { scenario, seed, from, to, keys, offset }) {
+async function play(client, { schema, scenario, seed, from, to, keys, offset }) {
+  // Every event in a tick is unqualified SQL (INSERT INTO trip, ...), so the
+  // connection's search_path decides which clone it hits. Pooled connections
+  // are reused across sessions, so say it out loud here: a tick must never
+  // land in another learner's world.
+  await client.query(`SET search_path TO "${schema}", public`);
+
   const events = [];
   const series = [];
   const findings = [];
@@ -648,7 +695,13 @@ async function worldSnapshot(client, session) {
     trucks,
     recent: recent.rows,
     integrity: judge(raw, offset, ['drift', 'overlap', 'orphans']),
-    objects: { trigger: built.hasTrigger, procedure: built.hasProcedure, function: built.hasFunction },
+    objects: {
+      trigger: built.hasTrigger,
+      procedure: built.hasProcedure,
+      function: built.hasFunction,
+      // A trigger can exist and still do nothing. The panel needs both facts.
+      triggerObjects: built.triggers.length,
+    },
     events: (st ? st.events : []).slice(-14),
     series: (st ? st.series : []).slice(-160),
   };
@@ -748,6 +801,7 @@ export async function worldAdvance(pool, seedText, { session, n = 1 }) {
 
     const count = Math.max(1, Math.min(64, Number(n) || 1));
     const played = await play(client, {
+      schema,
       scenario: st.scenario,
       seed: st.seed,
       from: st.cursor,
@@ -781,9 +835,37 @@ export async function worldApply(pool, { session, script }) {
     return {
       ok: out.ok,
       statements: out.statements,
+      // The statements, their rows and their errors. The workbench prints them
+      // itself; "apply" is only one half of the loop.
+      results: out.results,
       error: out.error,
       notices: out.notices,
       ...(await worldSnapshot(client, session)),
+    };
+  } finally {
+    client.release();
+  }
+}
+
+// What the learner has built in their own clone: every routine and trigger,
+// with the definition Postgres stored. CREATE OR REPLACE is easier to trust
+// when you can read back the body you just replaced.
+export async function worldLibrary(pool, { session }) {
+  const schema = checkSession(session);
+  const client = await pool.connect();
+  try {
+    await client.query('ROLLBACK').catch(() => {});
+    await client.query(`SET search_path TO "${schema}", public`);
+    const lib = await objects(client, schema);
+    return {
+      ok: true,
+      routines: lib.routines,
+      triggers: lib.triggers,
+      built: {
+        procedure: lib.hasProcedure,
+        function: lib.hasFunction,
+        trigger: lib.hasTrigger,
+      },
     };
   } finally {
     client.release();

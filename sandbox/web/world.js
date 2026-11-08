@@ -17,11 +17,14 @@
     { v: 64, label: '64×' },
   ];
 
-  const SKELETONS = {
-    hire: {
-      name: 'the hire procedure',
+  // Snippets are only a place to start. Each one is inserted at the cursor in
+  // the workbench, so a learner can compose several objects in one file, or
+  // ignore the shapes and write their own from a blank page.
+  const SNIPPETS = {
+    procedure: {
+      name: 'procedure',
       hint: 'A hire writes one TRKEMPLOYEE row, then one DRIVER or one MECHANIC row. Refuse what the depot would never allow: an unknown role, a licence the other kind already holds, a mechanic with no experience.',
-      sql: `-- 1. hire someone
+      sql: `-- a procedure: called with CALL, may change rows
 CREATE OR REPLACE PROCEDURE add_employee(
     p_enum NUMERIC, p_name VARCHAR, p_dob DATE, p_address VARCHAR,
     p_hiredate DATE, p_lnum NUMERIC, p_status VARCHAR,
@@ -30,6 +33,7 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
     -- refuse a role that is neither DRIVER nor MECHANIC
+    --   RAISE EXCEPTION '...' USING ERRCODE = '...';
 
     -- refuse a licence already held by the other kind
     -- (DRIVER and MECHANIC share LNUM; nobody may be both)
@@ -46,10 +50,10 @@ END;
 $$;
 `,
     },
-    counter: {
-      name: 'the trip counter',
-      hint: 'DRIVER.totalTripMade is a stored count of TRIP rows. A trigger keeps it honest. Cover insert, delete, and update — a trip can move between drivers. Rows that already exist never fire a trigger, so backfill them once.',
-      sql: `-- 2. keep the counter honest
+    trigger: {
+      name: 'trigger',
+      hint: 'DRIVER.totalTripMade is a stored count of TRIP rows. A trigger keeps it honest. Cover insert, delete and update — a trip can move between drivers. Rows that already exist never fire a trigger, so backfill them once.',
+      sql: `-- a trigger: one function that returns trigger, one CREATE TRIGGER
 CREATE OR REPLACE FUNCTION trg_total_trip_made() RETURNS trigger
 LANGUAGE plpgsql
 AS $$
@@ -58,7 +62,7 @@ BEGIN
     --   INSERT, UPDATE: NEW.lnum     DELETE: OLD.lnum
     -- an UPDATE that changes lnum moves the count between two drivers
 
-    RETURN NULL;
+    RETURN NULL;   -- AFTER triggers ignore the return value
 END;
 $$;
 
@@ -68,10 +72,10 @@ CREATE OR REPLACE TRIGGER trip_total_trip_made
     EXECUTE FUNCTION trg_total_trip_made();
 `,
     },
-    longest: {
-      name: 'the longest trip',
+    function: {
+      name: 'function',
       hint: 'A function answers a question without changing anything: the most legs on any one trip of a driver. A driver with no trips answers 0, not null.',
-      sql: `-- 3. the longest trip
+      sql: `-- a function: returns a value, used in SELECT
 CREATE OR REPLACE FUNCTION longtrip(p_lnum NUMERIC)
 RETURNS NUMERIC
 LANGUAGE plpgsql
@@ -86,6 +90,20 @@ BEGIN
     RETURN coalesce(v_max, 0);
 END;
 $$;
+`,
+    },
+    query: {
+      name: 'try it',
+      hint: 'CALL runs a procedure and changes rows. SELECT runs a function and only reads. The UPDATE is the one backfill the seed rows need after the trigger exists.',
+      sql: `-- Try what you built. Rows come back in the result tab.
+CALL add_employee(101, 'New Driver', DATE '1990-01-01', '1 Test St',
+                  CURRENT_DATE, 91000, 'AVAILABLE', NULL, 'DRIVER');
+
+SELECT longtrip(10001) AS longest;
+
+-- Rows written before the trigger never fired it: repair them once.
+UPDATE driver d
+   SET totalTripMade = (SELECT count(*) FROM trip t WHERE t.lnum = d.lnum);
 `,
     },
   };
@@ -189,8 +207,9 @@ $$;
             <ol>
               <li><strong>This depot is a Postgres database.</strong> Every tick is one real SQL statement run against a copy of the seed. The map and the numbers are that database, read back.</li>
               <li><strong>Pick a speed and watch.</strong> With no trigger, <code>driver.totalTripMade</code> stops matching the trips on file. The red number on the right is that gap, and it grows.</li>
-              <li><strong>Write one of the three.</strong> The buttons at the bottom load the shape: the hire procedure, the trip counter, the longest trip. Fill in the body.</li>
-              <li><strong>Apply it.</strong> The running copy takes your SQL at once, so the world that was rotting stops rotting while it is still moving.</li>
+              <li><strong>Write your own.</strong> The workbench at the bottom takes any SQL: <code>CREATE OR REPLACE</code>, a trigger, a function, a plain <code>SELECT</code>, a <code>CALL</code>. The four buttons only insert a marked-up shape at the cursor; the body is yours to write, ignore, or replace entirely.</li>
+              <li><strong>Run it in the world.</strong> The running clone takes your script at once, so the depot that was rotting stops rotting while it is still moving. The result tab shows rows, notices and errors with a line and column.</li>
+              <li><strong>Read the objects tab.</strong> Every routine and trigger you have written is there, with the definition Postgres stored. Load one back into the editor to see what <code>CREATE OR REPLACE</code> actually left behind, or start again from a blank page.</li>
               <li><strong>Click any row below</strong> under "what just happened" to see the exact statement that ran and what it was meant to do.</li>
             </ol>
             <p class="howto-foot">Scroll to zoom the map, drag to pan, space pauses. A new world always starts paused.</p>
@@ -200,19 +219,39 @@ $$;
 
         <section class="desk" id="w-desk">
           <div class="desk-head">
-            <span class="desk-title">change the physics</span>
+            <span class="desk-title">sql workbench</span>
             <div class="desk-tabs">
-              ${Object.entries(SKELETONS)
-                .map(([k, s]) => `<button class="tab" data-load="${k}">${s.name}</button>`)
+              ${Object.entries(SNIPPETS)
+                .map(([k, s]) => `<button class="tab" data-snip="${k}">${s.name}</button>`)
                 .join('')}
             </div>
             <span class="spacer"></span>
             <span class="mono" id="w-desk-note"></span>
-            <button class="btn primary" id="w-apply">Apply to the world</button>
+            <button class="btn quiet tiny" id="w-clear">clear</button>
+            <button class="btn primary" id="w-apply">run in the world</button>
           </div>
           <div class="desk-body">
-            <div class="desk-hint" id="w-desk-hint"></div>
+            <div class="desk-guide" id="w-guide">
+              <p class="guide-lead">Write anything. It runs against your own copy of the seed, not the board behind the console.</p>
+              <p class="guide-head">the depot calls three names</p>
+              <ul class="guide-list">
+                <li><code>add_employee(...)</code> when it hires</li>
+                <li>a trigger on <code>trip</code> on arrival, cancel, move</li>
+                <li><code>longtrip(lnum)</code> when it asks</li>
+              </ul>
+              <p class="guide-note">Anything else you create is yours. The steps only measure the outcome, never the text.</p>
+              <p class="guide-snip" id="w-snip-hint"></p>
+              <p class="guide-foot">Ctrl/⌘+Enter runs the file. Ctrl/⌘+Shift+Enter runs the selection.</p>
+            </div>
             <div class="desk-editor" id="w-editor"></div>
+            <div class="desk-out">
+              <div class="out-tabs" id="w-out-tabs">
+                <button class="on" data-out="result">result</button>
+                <button data-out="objects">objects <span id="w-objs-n"></span></button>
+                <button data-out="syntax">syntax</button>
+              </div>
+              <div class="out-body" id="w-out-body"></div>
+            </div>
           </div>
         </section>
       </div>`;
@@ -462,7 +501,7 @@ $$;
         key: 'trigger',
         title: 'Keep the counter',
         done: !!o.trigger,
-        body: 'Load “the trip counter” at the bottom. One trigger function, one CREATE TRIGGER, fired AFTER INSERT OR UPDATE OR DELETE, FOR EACH ROW.',
+        body: 'Write a trigger function and a CREATE TRIGGER in the workbench: AFTER INSERT OR UPDATE OR DELETE, FOR EACH ROW.',
         hint: 'Inside the function: INSERT and UPDATE use NEW.lnum, DELETE uses OLD.lnum. An UPDATE that changes lnum moves the count between two drivers, so update both.',
       },
       {
@@ -476,7 +515,7 @@ $$;
         key: 'procedure',
         title: 'Hire someone',
         done: !!o.procedure,
-        body: 'The depot keeps trying to hire and has nothing to run. Write add_employee: one TRKEMPLOYEE row, then a DRIVER or MECHANIC row, and refuse what cannot exist.',
+        body: 'The depot keeps trying to hire and has nothing to run. Write add_employee in the workbench: one TRKEMPLOYEE row, then a DRIVER or MECHANIC row, and refuse what cannot exist.',
         hint: 'Refuse: a role that is not DRIVER or MECHANIC; a licence the other kind already holds; a MECHANIC with no experience; a DRIVER with one. RAISE EXCEPTION does the refusing.',
       },
       {
@@ -501,9 +540,9 @@ $$;
 
     document.getElementById('w-steps').innerHTML = steps
       .map(
-        (s) => `<details class="step ${s.done ? 'done' : ''}">
-          <summary><span class="mark">${s.done ? '✓' : '·'}</span><span class="t">${escapeHtml(s.title)}</span></summary>
-          <div class="step-body">
+        (s) => `<details class="wstep ${s.done ? 'done' : ''}">
+          <summary><span class="wstep-mark">${s.done ? '✓' : '·'}</span><span class="wstep-t">${escapeHtml(s.title)}</span></summary>
+          <div class="wstep-body">
             <p>${escapeHtml(s.body)}</p>
             <pre>${escapeHtml(s.hint)}</pre>
           </div>
@@ -521,9 +560,11 @@ $$;
 
     const hint = document.getElementById('w-hint');
     if (!snap.objects.trigger) {
-      hint.innerHTML = drift
-        ? 'Nothing is keeping <code>driver.totalTripMade</code>. Load the trip counter below and apply it, then backfill the rows that already drifted.'
-        : 'Nothing is keeping <code>driver.totalTripMade</code> yet. Load the trip counter below.';
+      hint.innerHTML = snap.objects.triggerObjects
+        ? 'A trigger on <code>trip</code> exists, but an insert did not move <code>driver.totalTripMade</code>. Open it in the objects tab: check <code>TG_OP</code> and <code>NEW.lnum</code>.'
+        : drift
+          ? 'Nothing is keeping <code>driver.totalTripMade</code>. Write a trigger on trip in the workbench and run it, then backfill the rows that already drifted.'
+          : 'Nothing is keeping <code>driver.totalTripMade</code> yet. Write a trigger on trip in the workbench.';
     } else if (drift) {
       hint.innerHTML =
         'The trigger is in place, but rows that drifted before it still disagree. Backfill once: <code>UPDATE driver SET totalTripMade = (SELECT count(*) …)</code>.';
@@ -673,18 +714,32 @@ $$;
     document.getElementById('w-list').innerHTML = '';
     document.querySelectorAll('.truck').forEach((n) => n.remove());
     truckEls = new Map();
+    lastRun = null;
+    setOut('result');
     paint(out);
+    await loadLibrary();
     setNote('world ready — pick a speed');
   }
 
   // -------------------------------------------------------------------- desk
+  //
+  // The workbench is deliberately a plain SQL file, not three forms. You can
+  // write one object, five, a SELECT, a CALL, or DROP what you built. The only
+  // contract is the three names the depot calls; everything else is yours.
 
   let cm = null;
+  let outTab = 'result';
+  let lastRun = null;
+  let library = { routines: [], triggers: [] };
 
   function mountEditor(host) {
     const ta = document.createElement('textarea');
     ta.spellcheck = false;
-    ta.value = localStorage.getItem('trk.world.sql') || '';
+    // A file that was loaded from another world carries that clone's schema
+    // prefix. Strip it on the way in, so an old file still runs here.
+    const saved = (localStorage.getItem('trk.world.sql') || '').replace(/\bplay_[a-z0-9]{6,24}\./g, '');
+    ta.value = saved;
+    if (saved !== (localStorage.getItem('trk.world.sql') || '')) localStorage.setItem('trk.world.sql', saved);
     host.appendChild(ta);
     if (window.CodeMirror) {
       cm = window.CodeMirror.fromTextArea(ta, {
@@ -694,8 +749,11 @@ $$;
         tabSize: 4,
         matchBrackets: true,
         extraKeys: {
-          'Cmd-Enter': () => applyScript(),
-          'Ctrl-Enter': () => applyScript(),
+          'Cmd-Enter': () => applyScript(false),
+          'Ctrl-Enter': () => applyScript(false),
+          'Shift-Cmd-Enter': () => applyScript(true),
+          'Shift-Ctrl-Enter': () => applyScript(true),
+          'Ctrl-Shift-Enter': () => applyScript(true),
           Tab: (i) => i.replaceSelection('    '),
           'Ctrl-Space': 'autocomplete',
         },
@@ -706,26 +764,226 @@ $$;
     } else {
       ta.oninput = () => localStorage.setItem('trk.world.sql', ta.value);
     }
+    const save = (v) => localStorage.setItem('trk.world.sql', v);
     return {
       get: () => (cm ? cm.getValue() : ta.value),
       set: (v) => {
         if (cm) cm.setValue(v);
         else ta.value = v;
-        localStorage.setItem('trk.world.sql', v);
+        save(v);
       },
+      insert: (v) => {
+        if (cm) {
+          cm.replaceSelection(v);
+          cm.focus();
+          save(cm.getValue());
+        } else {
+          const start = ta.selectionStart ?? ta.value.length;
+          ta.value = ta.value.slice(0, start) + v + ta.value.slice(ta.selectionEnd ?? start);
+          ta.selectionStart = ta.selectionEnd = start + v.length;
+          save(ta.value);
+        }
+      },
+      selection: () => (cm ? cm.getSelection() : ta.value.slice(ta.selectionStart, ta.selectionEnd)),
     };
   }
 
-  async function applyScript() {
-    if (!state.editor) return;
-    setNote('applying…');
-    const out = await call('/api/world/apply', { session: state.session, script: state.editor.get() });
-    if (out.error) {
-      setNote(`ERROR: ${out.error.message}`);
+  const esc = escapeHtml;
+
+  function rowTable(columns, rows) {
+    const head = columns.map((c) => `<th>${esc(c)}</th>`).join('');
+    const shown = (rows || []).slice(0, 200);
+    const body = shown
+      .map(
+        (row) =>
+          `<tr>${columns
+            .map((c) => {
+              const v = row[c];
+              return `<td>${v === null || v === undefined ? '<span class="null">null</span>' : esc(v)}</td>`;
+            })
+            .join('')}</tr>`,
+      )
+      .join('');
+    const more =
+      (rows || []).length > shown.length
+        ? `<p class="out-placeholder">showing ${shown.length} of ${rows.length} rows</p>`
+        : '';
+    return `<div class="res-wrap"><table class="res-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>${more}`;
+  }
+
+  function renderResult(host) {
+    if (!lastRun) {
+      host.innerHTML =
+        '<p class="out-placeholder">Run the file. Rows, notices and errors land here — including the line and column of a syntax or PL/pgSQL error.</p>';
       return;
     }
-    paint(out);
-    setNote(`${out.statements} statement${out.statements === 1 ? '' : 's'} applied — the world is running your SQL`);
+    const parts = [];
+    for (const r of lastRun.results || []) {
+      const title = r.error ? 'error' : r.command || 'statement';
+      const rows = typeof r.rowCount === 'number' ? ` · ${r.rowCount} row${r.rowCount === 1 ? '' : 's'}` : '';
+      parts.push(`<div class="run-step">
+        <div class="run-head"><code>${esc(r.text)}</code><span>${esc(title)}${rows}</span></div>`);
+      if (r.error) {
+        const where = r.error.where ? `<span class="where">line ${r.error.where.line}, column ${r.error.where.column}${r.error.code ? ` · SQLSTATE ${esc(r.error.code)}` : ''}</span>` : '';
+        parts.push(`<div class="alert bad"><strong>${esc(r.error.message)}</strong>${
+          r.error.detail ? `<span>${esc(r.error.detail)}</span>` : ''
+        }${r.error.hint ? `<span>${esc(r.error.hint)}</span>` : ''}${where}</div>`);
+      } else if (r.columns && r.columns.length) {
+        parts.push(rowTable(r.columns, r.rows));
+      }
+      parts.push('</div>');
+    }
+    if ((lastRun.notices || []).length) {
+      parts.push(`<div class="notices">${lastRun.notices.map((n) => `<div class="notice">${esc(n)}</div>`).join('')}</div>`);
+    }
+    host.innerHTML = parts.join('') || '<p class="out-placeholder">Nothing ran.</p>';
+  }
+
+  function renderObjects(host) {
+    const procs = library.routines.filter((r) => r.kind === 'p');
+    const fns = library.routines.filter((r) => r.kind !== 'p');
+    const parts = [];
+    const routines = (label, items) => {
+      parts.push(`<div class="lib-group"><p class="lib-head">${label}</p>`);
+      if (!items.length) parts.push('<p class="out-placeholder">none yet — write one and run it</p>');
+      for (const r of items) {
+        const i = library.routines.indexOf(r);
+        const isTriggerFn = r.result === 'trigger';
+        const kind = r.kind === 'p' ? 'procedure' : isTriggerFn ? 'trigger fn' : 'function';
+        parts.push(`<div class="lib-item">
+          <div class="lib-top"><code>${esc(r.name)}(${esc(r.args)})</code><span class="kind">${kind}</span></div>
+          <div class="lib-sub"><span>${esc(r.result || 'no return value')}</span><button class="btn quiet tiny" data-def="r:${i}">load</button></div>
+        </div>`);
+      }
+      parts.push('</div>');
+    };
+    routines('procedures', procs);
+    routines('functions', fns);
+    parts.push('<div class="lib-group"><p class="lib-head">triggers</p>');
+    if (!library.triggers.length) parts.push('<p class="out-placeholder">none yet — a trigger needs a function and a CREATE TRIGGER</p>');
+    library.triggers.forEach((t, i) => {
+      parts.push(`<div class="lib-item">
+        <div class="lib-top"><code>${esc(t.name)}</code><span class="kind">on ${esc(t.table_name)}</span></div>
+        <div class="lib-sub"><span>${esc(t.when_clause || 'for each row, after')}</span><button class="btn quiet tiny" data-def="t:${i}">load</button></div>
+      </div>`);
+    });
+    // Existence is not the same as working: the clone is probed with one real
+    // insert, and the tab says so plainly when the trigger does nothing.
+    if (library.built && library.built.trigger === false && library.triggers.length) {
+      parts.push(
+        '<p class="lib-warn">A trigger on <code>trip</code> exists, but an insert did not move <code>driver.totalTripMade</code>. It is not keeping the counter yet.</p>',
+      );
+    }
+    parts.push('</div>');
+    host.innerHTML = parts.join('');
+  }
+
+  function renderSyntax(host) {
+    host.innerHTML = `<div class="syntax">
+      <p class="syntax-h">procedure — called with CALL, may write rows</p>
+      <pre>CREATE OR REPLACE PROCEDURE add_employee(
+    p_enum NUMERIC, p_name VARCHAR, p_role VARCHAR DEFAULT 'DRIVER')
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF p_role NOT IN ('DRIVER', 'MECHANIC') THEN
+        RAISE EXCEPTION 'unknown role: %', p_role;
+    END IF;
+    -- INSERT ...
+END;
+$$;
+
+CALL add_employee(101, 'New Driver', 'DRIVER');</pre>
+
+      <p class="syntax-h">function — returns a value, used in a query</p>
+      <pre>CREATE OR REPLACE FUNCTION longtrip(p_lnum NUMERIC)
+RETURNS NUMERIC
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE v_max NUMERIC;
+BEGIN
+    RETURN coalesce(v_max, 0);
+END;
+$$;
+
+SELECT longtrip(10001);</pre>
+
+      <p class="syntax-h">trigger — a function returning trigger, plus CREATE TRIGGER</p>
+      <pre>CREATE OR REPLACE FUNCTION trg_example() RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- INSERT/UPDATE: NEW is the row being written
+    -- DELETE: OLD is the row being removed
+    RETURN NULL;  -- AFTER triggers ignore this
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER trip_example
+    AFTER INSERT OR UPDATE OR DELETE ON trip
+    FOR EACH ROW
+    EXECUTE FUNCTION trg_example();</pre>
+
+      <p class="syntax-h">replace or remove</p>
+      <pre>CREATE OR REPLACE changes the body in place.
+DROP TRIGGER trip_example ON trip;
+DROP FUNCTION trg_example();
+DROP PROCEDURE add_employee(numeric, varchar, date, varchar, date,
+                            numeric, varchar, varchar, varchar);</pre>
+
+      <p class="syntax-note">RAISE EXCEPTION aborts the statement (and the CALL); RAISE NOTICE only prints, and appears under the result. Every statement runs on its own, like <code>psql</code>: a failure later in the file does not undo the objects created before it. This is your clone, so DROP and broken tables are safe — <strong>new world</strong> rebuilds from the seed.</p>
+    </div>`;
+  }
+
+  function setOut(tab) {
+    outTab = tab;
+    document.querySelectorAll('#w-out-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.out === tab));
+    renderOut();
+  }
+
+  function renderOut() {
+    const host = document.getElementById('w-out-body');
+    if (!host) return;
+    if (outTab === 'objects') renderObjects(host);
+    else if (outTab === 'syntax') renderSyntax(host);
+    else renderResult(host);
+  }
+
+  async function loadLibrary() {
+    const out = await call('/api/world/objects', { session: state.session });
+    if (!out.ok) return;
+    library = {
+      routines: out.routines || [],
+      triggers: out.triggers || [],
+      built: out.built || {},
+    };
+    const n = document.getElementById('w-objs-n');
+    if (n) n.textContent = String(library.routines.length + library.triggers.length);
+    if (outTab === 'objects') renderOut();
+  }
+
+  async function applyScript(selectionOnly) {
+    if (!state.editor) return;
+    const script = selectionOnly ? state.editor.selection() : state.editor.get();
+    if (!String(script || '').trim()) {
+      setNote(selectionOnly ? 'select something to run' : 'the editor is empty');
+      return;
+    }
+    setNote('running…');
+    const out = await call('/api/world/apply', { session: state.session, script });
+    lastRun = out;
+    setOut('result');
+    if (out.integrity) paint(out);
+    await loadLibrary();
+    if (out.error) {
+      const where = out.error.where ? ` at line ${out.error.where.line}, column ${out.error.where.column}` : '';
+      setNote(`ERROR${where}: ${out.error.message}`);
+    } else {
+      setNote(
+        `${out.statements} statement${out.statements === 1 ? '' : 's'} ran — the world is running your SQL`,
+      );
+    }
   }
 
   // -------------------------------------------------------------------- mount
@@ -758,18 +1016,44 @@ $$;
       localStorage.setItem('trk.world.seen', '1');
     };
     if (!localStorage.getItem('trk.world.seen')) showHowto(true);
-    document.getElementById('w-apply').onclick = applyScript;
+    document.getElementById('w-apply').onclick = () => applyScript(false);
+    document.getElementById('w-clear').onclick = () => {
+      state.editor.set('');
+      setNote('editor cleared — the world still has what you already ran');
+    };
 
-    document.querySelectorAll('[data-load]').forEach((b) => {
+    document.querySelectorAll('[data-snip]').forEach((b) => {
       b.onclick = () => {
-        const s = SKELETONS[b.dataset.load];
-        state.editor.set(s.sql);
-        document.getElementById('w-desk-hint').textContent = s.hint;
+        const s = SNIPPETS[b.dataset.snip];
+        state.editor.insert(s.sql);
+        document.getElementById('w-snip-hint').textContent = s.hint;
+        setNote(`${s.name} shape inserted at the cursor`);
       };
     });
 
-    document.getElementById('w-desk-hint').textContent =
-      'Pick one of the three, fill in the body, apply. The depot keeps running while you edit.';
+    document.querySelectorAll('#w-out-tabs button').forEach((b) => {
+      b.onclick = () => setOut(b.dataset.out);
+    });
+
+    // A definition in the objects tab can be loaded straight back into the
+    // editor: the fastest way to see what CREATE OR REPLACE actually stored.
+    document.getElementById('w-out-body').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-def]');
+      if (!b) return;
+      const [kind, idx] = b.dataset.def.split(':');
+      const item = kind === 'r' ? library.routines[Number(idx)] : library.triggers[Number(idx)];
+      if (!item) return;
+      // pg_get_functiondef qualifies the name with the clone's schema. Strip
+      // it: the editor should hold SQL that runs in whichever world is open.
+      const definition = String(item.definition || '').replace(/\bplay_[a-z0-9]{6,24}\./g, '');
+      state.editor.set(definition);
+      document.getElementById('w-snip-hint').textContent = `loaded ${item.name} — the schema name is stripped, so it runs in the current world`;
+      setNote(`loaded ${item.name} into the editor`);
+    });
+
+    document.getElementById('w-snip-hint').textContent =
+      'Pick a shape above to insert it at the cursor, or just start typing.';
+    renderOut();
 
     // Space pauses. It is the only key the world listens for.
     const onKey = (e) => {
