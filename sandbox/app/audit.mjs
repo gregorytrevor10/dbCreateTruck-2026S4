@@ -492,6 +492,10 @@ function ringGraph(edges) {
 }
 
 async function worldSnapshot(client, session) {
+  // Pooled connections keep whatever search_path the last request left behind.
+  // Every entry point out of this file sets it explicitly; forgetting once put
+  // the depot's trips into public for a whole afternoon.
+  await client.query(`SET search_path TO "${checkSession(session)}", public`);
   const st = SESSIONS.get(session);
   const drivers = await client.query(
     `SELECT d.enum, e.name, d.lnum, d.status, d.totalTripMade AS counter,
@@ -600,6 +604,19 @@ async function inheritPublic(client, schema) {
     .catch(() => {});
 }
 
+// Every browser that ever loaded the page left a schema behind. Keep the live
+// ones, drop the rest.
+async function sweepSchemas(client, keep) {
+  const { rows } = await client.query(
+    `SELECT nspname FROM pg_namespace WHERE nspname LIKE 'play\_%'`,
+  );
+  const live = new Set([...SESSIONS.values()].map((s) => s.schema));
+  for (const row of rows) {
+    if (row.nspname === keep || live.has(row.nspname)) continue;
+    await client.query(`DROP SCHEMA IF EXISTS "${row.nspname}" CASCADE`).catch(() => {});
+  }
+}
+
 export async function worldReset(pool, seedText, { session, seed = 7001 }) {
   const schema = checkSession(session);
   const client = await pool.connect();
@@ -608,6 +625,7 @@ export async function worldReset(pool, seedText, { session, seed = 7001 }) {
     await inheritPublic(client, schema);
     const raw = await sampleInvariants(client);
     const offset = { orphans: raw.orphans, nulls: raw.nulls };
+    await sweepSchemas(client, schema);
     SESSIONS.set(session, {
       schema,
       scenario: 'traffic',

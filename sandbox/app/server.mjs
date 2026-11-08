@@ -224,6 +224,7 @@ async function triggers(client) {
 
 async function state() {
   const client = await pool.connect();
+  await usePublic(client);
   try {
     const version = await client.query('SHOW server_version');
     const seeded = await client.query(`SELECT to_regclass('public.trkemployee') IS NOT NULL AS ok`);
@@ -255,6 +256,14 @@ async function state() {
   }
 }
 
+// Pooled connections remember their last search_path, and the world moves it
+// into a clone schema. Anything that means to work on the visible board says so
+// out loud.
+async function usePublic(client) {
+  await client.query('SET search_path TO public');
+  return client;
+}
+
 // ------------------------------------------------------------------- reseed
 
 // The seed, parsed once. Every clone and every audit replays this exact text,
@@ -270,6 +279,7 @@ async function seedText() {
 
 async function reseed() {
   const client = await pool.connect();
+  await usePublic(client);
   const started = process.hrtime.bigint();
   try {
     const raw = await readFile(SEED_FILE, 'utf8');
@@ -366,6 +376,7 @@ const server = createServer(async (req, res) => {
       }
       const client = await pool.connect();
       try {
+        await usePublic(client);
         return json(res, 200, await tracedRun(client, sql));
       } finally {
         client.release();
@@ -385,6 +396,7 @@ const server = createServer(async (req, res) => {
       const raw = await readFile(join(SUBMISSION_DIR, relative), 'utf8');
       const client = await pool.connect();
       try {
+        await usePublic(client);
         return json(res, 200, await tracedRun(client, withoutMetaCommands(raw)));
       } finally {
         client.release();
@@ -417,6 +429,7 @@ const server = createServer(async (req, res) => {
       const name = url.searchParams.get('name') || '';
       const client = await pool.connect();
       try {
+        await usePublic(client);
         const found = await client.query(
           `SELECT pg_get_functiondef(p.oid) AS definition
              FROM pg_proc p

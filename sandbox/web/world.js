@@ -135,6 +135,7 @@ $$;
             ${RATES.map((r) => `<button data-rate="${r.v}" class="${r.v === 0 ? 'on' : ''}">${r.label}</button>`).join('')}
           </div>
           <div class="headline" id="w-headline"></div>
+          <button class="btn quiet tiny" id="w-help">how to play</button>
           <button class="btn quiet tiny" id="w-console">console</button>
           <button class="btn quiet tiny" id="w-reset">new world</button>
         </header>
@@ -158,6 +159,7 @@ $$;
             <span class="cap">DRIVER rows out of step</span>
           </div>
           <p class="hint" id="w-hint"></p>
+          <p class="next" id="w-next"></p>
 
           <div class="panel-head slim"><span>drivers</span><span id="w-dcount"></span></div>
           <div class="dhead"><span>driver</span><span>trips</span><span>counter</span><span>off by</span></div>
@@ -176,6 +178,21 @@ $$;
           <div class="ticker-head"><span>what just happened</span><span class="mono" id="w-count"></span></div>
           <div class="ticker-list" id="w-list"></div>
         </section>
+
+        <div class="howto" id="w-howto" hidden>
+          <div class="howto-card">
+            <h2>How to play</h2>
+            <ol>
+              <li><strong>This depot is a Postgres database.</strong> Every tick is one real SQL statement run against a copy of the seed. The map and the numbers are that database, read back.</li>
+              <li><strong>Pick a speed and watch.</strong> With no trigger, <code>driver.totalTripMade</code> stops matching the trips on file. The red number on the right is that gap, and it grows.</li>
+              <li><strong>Write one of the three.</strong> The buttons at the bottom load the shape: the hire procedure, the trip counter, the longest trip. Fill in the body.</li>
+              <li><strong>Apply it.</strong> The running copy takes your SQL at once, so the world that was rotting stops rotting while it is still moving.</li>
+              <li><strong>Click any row below</strong> under "what just happened" to see the exact statement that ran and what it was meant to do.</li>
+            </ol>
+            <p class="howto-foot">Scroll to zoom the map, drag to pan, space pauses. A new world always starts paused.</p>
+            <button class="btn primary" id="w-gotit">Got it</button>
+          </div>
+        </div>
 
         <section class="desk" id="w-desk">
           <div class="desk-head">
@@ -467,6 +484,21 @@ $$;
     setCount('w-n-trip', snap.totals.trips);
     setCount('w-n-truck', snap.totals.trucks);
 
+    // One line that says what to do next, derived from what exists and what
+    // the rows say. This is the whole teaching path: fix the counter, backfill,
+    // then the hire, then the function.
+    const next = !snap.objects.trigger
+      ? 'Next: load <strong>the trip counter</strong>, keep it correct for insert, delete and update.'
+      : snap.integrity.drift
+        ? 'Next: the trigger is in, but the old rows still lie. Backfill once.'
+        : !snap.objects.procedure
+          ? 'Next: load <strong>the hire procedure</strong>. The depot keeps trying to hire and has nothing to run.'
+          : !snap.objects.function
+            ? 'Next: load <strong>the longest trip</strong>. Nothing depends on it yet, so it is safe to try.'
+            : 'All three exist. Speeding up is now a test, not a lesson.';
+    const nextEl = document.getElementById('w-next');
+    if (nextEl) nextEl.innerHTML = next;
+
     const c = clockOf(snap.cursor);
     document.getElementById('w-day').textContent = `Day ${c.day}`;
     document.getElementById('w-hour').textContent = c.hour;
@@ -499,11 +531,21 @@ $$;
     if (!list || !events.length) return;
     for (const ev of events.slice().reverse()) {
       const c = clockOf(ev.tick);
-      const row = document.createElement('div');
+      // Each row opens onto the statement that produced it. A tick is a query;
+      // hiding it would make the world look like an animation instead of a
+      // database being written to.
+      const row = document.createElement('details');
       row.className = `tick-row ${ev.ok ? 'ok' : ev.soft ? 'soft' : 'bad'}`;
-      row.innerHTML = `<span class="when">d${c.day} ${c.hour}</span>
-        <span class="what">${escapeHtml(ev.label)}</span>
-        <span class="said">${escapeHtml(ev.soft ? 'nothing to run it yet' : ev.error || ev.detail || 'done')}</span>`;
+      const said = ev.soft ? 'nothing to run it yet' : ev.error || ev.detail || 'done';
+      row.innerHTML = `<summary>
+          <span class="when">d${c.day} ${c.hour}</span>
+          <span class="what">${escapeHtml(ev.label)}</span>
+          <span class="said">${escapeHtml(said)}</span>
+        </summary>
+        <div class="tick-body">
+          <pre>${escapeHtml(ev.sql || '—')}</pre>
+          ${ev.why ? `<p>${escapeHtml(ev.why)}</p>` : ''}
+        </div>`;
       list.prepend(row);
     }
     while (list.children.length > 120) list.lastChild.remove();
@@ -638,6 +680,17 @@ $$;
     });
     document.getElementById('w-reset').onclick = reset;
     document.getElementById('w-console').onclick = () => window.TRK.show('console');
+
+    const howto = document.getElementById('w-howto');
+    const showHowto = (on) => {
+      howto.hidden = !on;
+    };
+    document.getElementById('w-help').onclick = () => showHowto(true);
+    document.getElementById('w-gotit').onclick = () => {
+      showHowto(false);
+      localStorage.setItem('trk.world.seen', '1');
+    };
+    if (!localStorage.getItem('trk.world.seen')) showHowto(true);
     document.getElementById('w-apply').onclick = applyScript;
 
     document.querySelectorAll('[data-load]').forEach((b) => {

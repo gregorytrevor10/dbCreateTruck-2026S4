@@ -1182,6 +1182,18 @@ h2.section span:last-child { color: var(--faint); letter-spacing: 0.06em; }
   color: var(--ink-2);
 }
 
+.next {
+  margin: 0;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  font-family: var(--serif);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  background: rgba(192, 68, 42, 0.035);
+}
+.next strong { font-weight: 600; color: var(--ink); }
+
 .panel-head.slim {
   display: flex;
   justify-content: space-between;
@@ -1251,15 +1263,34 @@ h2.section span:last-child { color: var(--faint); letter-spacing: 0.06em; }
 }
 .ticker-list { overflow-y: auto; flex: 1; }
 
-.tick-row {
+.tick-row { border-bottom: 1px solid var(--line-soft); }
+.tick-row > summary {
   display: grid;
   grid-template-columns: 62px 108px minmax(0, 1fr);
   gap: 10px;
   padding: 3px 14px;
   font-size: 11px;
-  border-bottom: 1px solid var(--line-soft);
   align-items: baseline;
+  cursor: pointer;
+  list-style: none;
 }
+.tick-row > summary::-webkit-details-marker { display: none; }
+.tick-row > summary:hover { background: rgba(22, 19, 15, 0.025); }
+.tick-row[open] > summary { background: rgba(22, 19, 15, 0.03); }
+.tick-body { padding: 4px 14px 8px; }
+.tick-body pre {
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  background: rgba(22, 19, 15, 0.04);
+  border-left: 2px solid var(--line);
+  padding: 6px 8px;
+  margin: 0 0 4px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+.tick-body p { margin: 0; font-size: 10.5px; color: var(--muted); line-height: 1.45; }
 .tick-row .when { font-family: var(--mono); font-size: 9px; color: var(--faint); }
 .tick-row .what { font-family: var(--mono); font-size: 10px; color: var(--ink-2); }
 .tick-row .said { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1374,3 +1405,45 @@ h2.section span:last-child { color: var(--faint); letter-spacing: 0.06em; }
 
 .tick-row.soft .what::before { content: "· "; color: var(--faint); }
 .tick-row.soft .said { color: var(--faint); }
+
+/* ---------------------------------------------------------------- how to play */
+
+.howto {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(22, 19, 15, 0.34);
+}
+.howto[hidden] { display: none; }
+
+.howto-card {
+  width: min(560px, 100%);
+  max-height: 84vh;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  padding: 20px 24px 18px;
+  box-shadow: 0 18px 40px rgba(22, 19, 15, 0.18);
+}
+.howto-card h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 21px;
+  color: var(--ink);
+  margin: 0 0 12px;
+}
+.howto-card ol { margin: 0; padding: 0 0 0 18px; }
+.howto-card li { font-size: 12.5px; line-height: 1.55; color: var(--ink-2); margin-bottom: 9px; }
+.howto-card strong { color: var(--ink); font-weight: 600; }
+.howto-card code {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  background: rgba(22, 19, 15, 0.06);
+  padding: 1px 3px;
+  border-radius: 2px;
+}
+.howto-foot { font-family: var(--serif); font-style: italic; font-size: 11.5px; color: var(--faint); margin: 4px 0 14px; }
