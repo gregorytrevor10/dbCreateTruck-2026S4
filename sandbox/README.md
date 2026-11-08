@@ -47,6 +47,27 @@ one. A new world is always born paused.
 Watch it at 64× with no trigger: the counters stop matching within a minute.
 That is the lesson, and it is visible without reading a word.
 
+### The world is the test
+
+Every tick states what it expects and then reads back what happened. Open a row
+under "what just happened":
+
+```
+d2 12:00   cancellation   expected 10003 counts 18, got 10003 counter 19
+  DELETE FROM tripleg WHERE tnum = 37; DELETE FROM trip WHERE tnum = 37;
+  A trip is cancelled; the counter must drop by one.
+    expected   10003 counts 18
+    actual     10003 counter 19
+```
+
+No separate quiz. The pass/fail is the depot's own rows agreeing or not.
+
+Five steps on the right are checked against the database, not against what you
+typed: watch it break, keep the counter, repair the old rows, hire someone,
+answer about trips. Open a step when stuck and it says what the rule is and
+where to look. You can skip any of them and write something else entirely; the
+steps only measure the outcome.
+
 ### Changing the physics
 
 The strip at the bottom is the only input. Three buttons load the shape of the

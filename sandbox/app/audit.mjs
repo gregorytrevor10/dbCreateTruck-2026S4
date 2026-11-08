@@ -150,6 +150,7 @@ const EVENTS = {
       label: 'arrival',
       sql: `INSERT INTO trip (tnum, lnum, regnum, trip_date) VALUES (${tnum}, ${d}, ${quote(truck)}, CURRENT_DATE)`,
       expect: 'ok',
+      watch: [d],
       why: 'a trip lands for a driver; totalTripMade must equal the number of trips that driver has',
     };
   },
@@ -165,6 +166,7 @@ const EVENTS = {
       sql: `DELETE FROM tripleg WHERE tnum = ${tnum};
             DELETE FROM trip    WHERE tnum = ${tnum};`,
       expect: 'ok',
+      watch: [String((await ctx.client.query('SELECT lnum::text AS v FROM trip WHERE tnum = $1', [tnum])).rows[0]?.v ?? '')].filter(Boolean),
       why: 'a trip is cancelled; the counter must drop by one. A trigger that only fires on INSERT fails here',
     };
   },
@@ -179,6 +181,10 @@ const EVENTS = {
       label: 'reassignment',
       sql: `UPDATE trip SET lnum = ${lnum} WHERE tnum = ${tnum} AND lnum <> ${lnum}`,
       expect: 'ok',
+      watch: [
+        lnum,
+        ...(await ctx.client.query('SELECT lnum::text AS v FROM trip WHERE tnum = $1', [tnum])).rows.map((x) => x.v),
+      ],
       why: 'a trip moves to another driver; both counters must move. A trigger without an UPDATE branch fails here',
     };
   },
@@ -193,6 +199,7 @@ const EVENTS = {
                 WHERE lnum = (SELECT lnum FROM trip WHERE tnum = ${tnum}));
             DELETE FROM trip WHERE lnum = (SELECT lnum FROM trip WHERE tnum = ${tnum});`,
       expect: 'ok',
+      watch: (await ctx.client.query('SELECT lnum::text AS v FROM trip WHERE tnum = $1', [tnum])).rows.map((x) => x.v),
       why: 'every trip of one driver is cancelled at once; the counter must follow each row',
     };
   },
@@ -203,6 +210,7 @@ const EVENTS = {
       label: `hire (${role.toLowerCase()})`,
       sql: hireSql(80000 + i, 8000000 + i, role, role === 'MECHANIC' ? 'STANDARD' : null),
       expect: 'ok',
+      employee: { enum: 80000 + i, role },
       why: 'a valid hire must land one TRKEMPLOYEE row and one matching DRIVER or MECHANIC row',
     };
   },
@@ -369,6 +377,50 @@ function isMissingObject(err) {
   return err && (err.code === '42883' || err.code === '3F000' || /does not exist/i.test(err.message || ''));
 }
 
+// The world is the test. After each tick, read back the thing the tick was
+// about and compare it with what the rule says it should be. No separate quiz:
+// if the depot's own rows disagree, the tick fails and says why.
+async function assertEvent(client, ev) {
+  if (ev.watch && ev.watch.length) {
+    const { rows } = await client.query(
+      `SELECT d.lnum::text AS lnum, d.totalTripMade AS counter,
+              (SELECT count(*)::int FROM trip t WHERE t.lnum = d.lnum) AS trips
+         FROM driver d WHERE d.lnum = ANY($1::numeric[])`,
+      [ev.watch],
+    );
+    if (!rows.length) return null;
+    const bad = rows.filter((r) => {
+      const counter = r.counter === null ? null : Number(r.counter);
+      const trips = Number(r.trips);
+      return counter === null ? trips > 0 : counter !== trips;
+    });
+    return {
+      pass: bad.length === 0,
+      expected: rows.map((r) => `${r.lnum} counts ${r.trips}`).join(', '),
+      actual: rows.map((r) => `${r.lnum} counter ${r.counter === null ? 'null' : r.counter}`).join(', '),
+    };
+  }
+
+  if (ev.employee) {
+    const { enum: id, role } = ev.employee;
+    const { rows } = await client.query(
+      `SELECT (SELECT count(*)::int FROM trkemployee WHERE enum = $1) AS emp,
+              (SELECT count(*)::int FROM driver      WHERE enum = $1) AS drv,
+              (SELECT count(*)::int FROM mechanic    WHERE enum = $1) AS mec`,
+      [id],
+    );
+    const r = rows[0];
+    const pass = role === 'DRIVER' ? r.emp === 1 && r.drv === 1 && r.mec === 0 : r.emp === 1 && r.drv === 0 && r.mec === 1;
+    return {
+      pass,
+      expected: role === 'DRIVER' ? '1 employee row, 1 driver row' : '1 employee row, 1 mechanic row',
+      actual: `${r.emp} employee, ${r.drv} driver, ${r.mec} mechanic`,
+    };
+  }
+
+  return null;
+}
+
 async function play(client, { scenario, seed, from, to, keys, offset }) {
   const events = [];
   const series = [];
@@ -386,7 +438,16 @@ async function play(client, { scenario, seed, from, to, keys, offset }) {
       break;
     }
 
-    const record = { tick: i, label: ev.label, why: ev.why, sql: ev.sql, ok: true, detail: null, error: null };
+    const record = {
+      tick: i,
+      label: ev.label,
+      why: ev.why,
+      sql: ev.sql,
+      ok: true,
+      detail: null,
+      error: null,
+      soft: false,
+    };
 
     if (ev.expect === 'value') {
       try {
@@ -422,6 +483,20 @@ async function play(client, { scenario, seed, from, to, keys, offset }) {
           record.error = err.message;
         } else {
           record.detail = 'refused, as it should be';
+        }
+      }
+    }
+
+    // What the rule said should be true afterwards, and what is.
+    if (!record.error) {
+      const assertion = await assertEvent(client, ev);
+      if (assertion) {
+        record.expectation = assertion;
+        if (!assertion.pass) {
+          record.ok = false;
+          record.detail = `expected ${assertion.expected}, got ${assertion.actual}`;
+        } else {
+          record.detail = assertion.actual;
         }
       }
     }

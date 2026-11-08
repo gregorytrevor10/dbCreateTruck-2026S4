@@ -1182,17 +1182,51 @@ h2.section span:last-child { color: var(--faint); letter-spacing: 0.06em; }
   color: var(--ink-2);
 }
 
-.next {
-  margin: 0;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--line-soft);
-  font-family: var(--serif);
+.steps { border-bottom: 1px solid var(--line-soft); }
+.step { border-bottom: 1px solid var(--line-soft); }
+.step:last-child { border-bottom: 0; }
+.step > summary {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 6px;
+  padding: 5px 14px;
+  cursor: pointer;
+  list-style: none;
   font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--ink-2);
-  background: rgba(192, 68, 42, 0.035);
+  color: var(--muted);
 }
-.next strong { font-weight: 600; color: var(--ink); }
+.step > summary::-webkit-details-marker { display: none; }
+.step > summary:hover { background: rgba(22, 19, 15, 0.025); }
+.step .mark { font-family: var(--mono); font-size: 10px; color: var(--faint); text-align: center; }
+.step.done .mark { color: var(--green); }
+.step.done > summary .t { color: var(--faint); text-decoration: line-through; text-decoration-color: var(--line); }
+.step-body { padding: 2px 14px 9px 36px; }
+.step-body p { margin: 0 0 6px; font-size: 11px; line-height: 1.5; color: var(--ink-2); }
+.step-body pre {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  background: rgba(22, 19, 15, 0.04);
+  border-left: 2px solid var(--line);
+  padding: 6px 8px;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.legend-wrap { border-top: 1px solid var(--line-soft); }
+.legend-wrap > summary {
+  padding: 5px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  background: rgba(22, 19, 15, 0.02);
+}
+.legend-wrap > summary::-webkit-details-marker { display: none; }
 
 .panel-head.slim {
   display: flex;
@@ -1447,3 +1481,24 @@ h2.section span:last-child { color: var(--faint); letter-spacing: 0.06em; }
   border-radius: 2px;
 }
 .howto-foot { font-family: var(--serif); font-style: italic; font-size: 11.5px; color: var(--faint); margin: 4px 0 14px; }
+
+/* what the tick expected, next to what happened */
+.expect {
+  display: grid;
+  gap: 1px;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.expect span { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 6px; }
+.expect em {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.expect.pass span { color: var(--green); }
+.expect.fail span { color: var(--red); }

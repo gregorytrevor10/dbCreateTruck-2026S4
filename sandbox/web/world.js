@@ -159,19 +159,23 @@ $$;
             <span class="cap">DRIVER rows out of step</span>
           </div>
           <p class="hint" id="w-hint"></p>
-          <p class="next" id="w-next"></p>
+
+          <div class="panel-head slim"><span>steps</span><span id="w-progress"></span></div>
+          <div class="steps" id="w-steps"></div>
 
           <div class="panel-head slim"><span>drivers</span><span id="w-dcount"></span></div>
           <div class="dhead"><span>driver</span><span>trips</span><span>counter</span><span>off by</span></div>
           <div class="dtable" id="w-drivers"></div>
 
-          <div class="panel-head slim"><span>what you are looking at</span></div>
-          <div class="legend" id="w-legend">
+          <details class="legend-wrap">
+            <summary>what you are looking at</summary>
+            <div class="legend" id="w-legend">
             ${LEGEND.map(
               (l) => `<div class="legend-row"><code>${l.table}</code><span id="w-n-${l.table}">—</span><em>${l.what}</em></div>`,
             ).join('')}
-            <div class="legend-note">Every tick is one statement against a clone of the seed: an insert, a cancel, a move between drivers, or a hire.</div>
-          </div>
+            <div class="legend-note">Every tick is one statement against a clone of the seed: an insert, a cancel, a move between drivers, or a hire. Each one states what it expects and reads back what happened.</div>
+            </div>
+          </details>
         </aside>
 
         <section class="ticker" id="w-ticker">
@@ -441,6 +445,73 @@ $$;
     }
   }
 
+  // Five steps, each one checked against the database. Open a step to get the
+  // nudge; the point is to make "stuck" a place with an exit.
+  function stepsFor(snap) {
+    const drift = snap.integrity.drift;
+    const o = snap.objects || {};
+    return [
+      {
+        key: 'break',
+        title: 'Watch it break',
+        done: drift > 0 || o.trigger,
+        body: 'Set the speed to 8× or 16× and leave it. Every tick that inserts or cancels a TRIP is supposed to move DRIVER.totalTripMade; nothing does, so the panel starts disagreeing.',
+        hint: 'You do not have to do anything here. Read a few rows in “what just happened” and open one to see the statement.',
+      },
+      {
+        key: 'trigger',
+        title: 'Keep the counter',
+        done: !!o.trigger,
+        body: 'Load “the trip counter” at the bottom. One trigger function, one CREATE TRIGGER, fired AFTER INSERT OR UPDATE OR DELETE, FOR EACH ROW.',
+        hint: 'Inside the function: INSERT and UPDATE use NEW.lnum, DELETE uses OLD.lnum. An UPDATE that changes lnum moves the count between two drivers, so update both.',
+      },
+      {
+        key: 'backfill',
+        title: 'Repair the old rows',
+        done: !!o.trigger && drift === 0,
+        body: 'Rows that existed before the trigger never fired it. Bring them into line once, by hand.',
+        hint: 'UPDATE driver d SET totalTripMade = (SELECT count(*) FROM trip t WHERE t.lnum = d.lnum);',
+      },
+      {
+        key: 'procedure',
+        title: 'Hire someone',
+        done: !!o.procedure,
+        body: 'The depot keeps trying to hire and has nothing to run. Write add_employee: one TRKEMPLOYEE row, then a DRIVER or MECHANIC row, and refuse what cannot exist.',
+        hint: 'Refuse: a role that is not DRIVER or MECHANIC; a licence the other kind already holds; a MECHANIC with no experience; a DRIVER with one. RAISE EXCEPTION does the refusing.',
+      },
+      {
+        key: 'function',
+        title: 'Answer about trips',
+        done: !!o.function,
+        body: 'Write longtrip(lnum): the most legs on any one trip that driver has made, and 0 when they have none.',
+        hint: 'Count legs per trip with LEFT JOIN tripleg, take max(), and coalesce to 0. The LEFT JOIN is what keeps a trip with no legs visible.',
+      },
+    ];
+  }
+
+  let stepSig = '';
+  function paintSteps(snap) {
+    const steps = stepsFor(snap);
+    const done = steps.filter((s) => s.done).length;
+    document.getElementById('w-progress').textContent = `${done}/${steps.length}`;
+
+    const sig = steps.map((s) => `${s.key}:${s.done ? 1 : 0}`).join('|');
+    if (sig === stepSig) return;
+    stepSig = sig;
+
+    document.getElementById('w-steps').innerHTML = steps
+      .map(
+        (s) => `<details class="step ${s.done ? 'done' : ''}">
+          <summary><span class="mark">${s.done ? '✓' : '·'}</span><span class="t">${escapeHtml(s.title)}</span></summary>
+          <div class="step-body">
+            <p>${escapeHtml(s.body)}</p>
+            <pre>${escapeHtml(s.hint)}</pre>
+          </div>
+        </details>`,
+      )
+      .join('');
+  }
+
   function paintSide(snap) {
     const drift = snap.integrity.drift;
     const box = document.getElementById('w-damage');
@@ -484,20 +555,7 @@ $$;
     setCount('w-n-trip', snap.totals.trips);
     setCount('w-n-truck', snap.totals.trucks);
 
-    // One line that says what to do next, derived from what exists and what
-    // the rows say. This is the whole teaching path: fix the counter, backfill,
-    // then the hire, then the function.
-    const next = !snap.objects.trigger
-      ? 'Next: load <strong>the trip counter</strong>, keep it correct for insert, delete and update.'
-      : snap.integrity.drift
-        ? 'Next: the trigger is in, but the old rows still lie. Backfill once.'
-        : !snap.objects.procedure
-          ? 'Next: load <strong>the hire procedure</strong>. The depot keeps trying to hire and has nothing to run.'
-          : !snap.objects.function
-            ? 'Next: load <strong>the longest trip</strong>. Nothing depends on it yet, so it is safe to try.'
-            : 'All three exist. Speeding up is now a test, not a lesson.';
-    const nextEl = document.getElementById('w-next');
-    if (nextEl) nextEl.innerHTML = next;
+    paintSteps(snap);
 
     const c = clockOf(snap.cursor);
     document.getElementById('w-day').textContent = `Day ${c.day}`;
@@ -545,6 +603,14 @@ $$;
         <div class="tick-body">
           <pre>${escapeHtml(ev.sql || '—')}</pre>
           ${ev.why ? `<p>${escapeHtml(ev.why)}</p>` : ''}
+          ${
+            ev.expectation
+              ? `<div class="expect ${ev.expectation.pass ? 'pass' : 'fail'}">
+                   <span><em>expected</em>${escapeHtml(ev.expectation.expected)}</span>
+                   <span><em>actual</em>${escapeHtml(ev.expectation.actual)}</span>
+                 </div>`
+              : ''
+          }
         </div>`;
       list.prepend(row);
     }
@@ -671,6 +737,7 @@ $$;
     state.rate = 0;
     state.busy = false;
     lastGraphKey = '';
+    stepSig = '';
     truckEls = new Map();
 
     state.editor = mountEditor(document.getElementById('w-editor'));
